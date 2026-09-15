@@ -1,120 +1,273 @@
+<div align="center">
+
+<img src="App/mcp_logo.png" alt="Mac Cleaner Pro" width="150">
+
 # Mac Cleaner Pro
 
-A native, honest macOS cleaner — written in Swift/SwiftUI, no telemetry, no
-cloud uploads, no subscription. Free and open source (MIT).
+**A native, honest macOS cleaner.**
 
-Built and maintained by a single indie developer. This repo is the desktop
-app; see [Support this project](#support-this-project) if you'd like to help
-keep it alive.
+No telemetry. No cloud uploads. No subscription. Every deletion undoable.
 
-## What it does
+[![macOS](https://img.shields.io/badge/macOS-13.0%2B-000000?style=flat-square&logo=apple&logoColor=white)](#-requirements)
+[![Swift](https://img.shields.io/badge/Swift-5.10-F05138?style=flat-square&logo=swift&logoColor=white)](#-architecture)
+[![SwiftUI](https://img.shields.io/badge/UI-SwiftUI-0071E3?style=flat-square&logo=swift&logoColor=white)](#-architecture)
+[![Version](https://img.shields.io/badge/version-1.0.3-blue?style=flat-square)](../../releases)
+[![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
+[![Telemetry](https://img.shields.io/badge/telemetry-none-brightgreen?style=flat-square)](#-privacy-promise)
 
-- **Smart Scan** — parallel Swift `TaskGroup` scan across caches, logs,
-  Xcode DerivedData, browser caches, and a System Data breakdown, driven by
-  a signed, updateable [rule pack](RulePacks/v1.json).
-- **Large & Old Files** — user-picked root, size/age filters, Quick Look
-  preview.
-- **Space Lens** — treemap + sunburst disk usage visualizer.
-- **Memory Manager** — live RAM gauge, top-consumer list, Quick Free.
-- **App Uninstaller** — finds leftover files across 12+ user-space and
-  6+ system-space categories.
-- **Trash-first + Undo** — every deletion stages at
-  `~/.Trash/MacCleanerPro/<UUID>/` for 30 days; nothing is ever deleted
-  outright.
-- **Tamper-evident Activity Log** — every cleanup action is recorded.
+[**Download**](#-download) · [**Quick start**](#-quick-start) · [**Features**](#-features) · [**Build from source**](#-build-from-source) · [**Architecture**](#-architecture) · [**Contributing**](#-contributing)
 
-Some features (system-cache cleanup, malware scanner, Space Lens
-system-level scans) need a privileged helper, which itself needs an Apple
-Developer Program membership — see [Ship status](#ship-status) below.
+</div>
 
-## Download
+---
 
-Prebuilt, signed releases: **[maccleanerpro.com](https://maccleanerpro.com)**
-or this repo's [Releases](../../releases) page.
+Apple's storage panel hides gigabytes behind a single opaque number called
+**System Data**. Mac Cleaner Pro breaks that number down rule by rule, shows
+you exactly what it found, and lets you take it back — safely.
 
-Or build it yourself — see below.
+It's free and open source (MIT), built in Swift/SwiftUI by a single indie
+developer. Every feature is unlocked for everyone: no trial, no paywall, no
+"Pro" upsell.
 
-## Building from source
+|  | |
+|---|---|
+| 🔒 **Nothing leaves your Mac** | No analytics, no crash pipelines, no accounts. A fresh install makes no network calls at all. |
+| ↩️ **Nothing is deleted outright** | Every removal is staged in the Trash under a per-action token, so Undo works even after a relaunch. |
+| ✍️ **Nothing is deleted on a guess** | The list of what's cleanable ships as an **Ed25519-signed rule pack** that the app verifies before it trusts a single path. |
 
-Requires Xcode and [XcodeGen](https://github.com/yonaskolb/XcodeGen)
-(`brew install xcodegen`).
+---
+
+## 📥 Download
+
+Prebuilt releases: **[maccleanerpro.com](https://maccleanerpro.com)** or this
+repo's [Releases](../../releases) page.
+
+Prefer to compile it yourself? See [Build from source](#-build-from-source).
+
+### 💻 Requirements
+
+| | |
+|---|---|
+| **macOS** | 13.0 Ventura or later |
+| **Chips** | Apple silicon + Intel |
+| **Disk** | ~20 MB |
+| **Permissions** | Full Disk Access (asked for during onboarding) |
+
+---
+
+## 🚀 Quick start
+
+Three steps from download to first clean — the in-app wizard walks you through
+2 and 3 as well.
+
+<table>
+<tr><td align="center" width="90"><h3>1</h3></td><td>
+
+**Install it.** Open the `.dmg` and drag **Mac Cleaner Pro** to **Applications**.
+
+Because this build isn't notarized yet ([why](#-ship-status)), macOS asks once:
+**right-click the app → Open → Open**. Every later launch is a normal
+double-click.
+
+</td></tr>
+<tr><td align="center"><h3>2</h3></td><td>
+
+**Grant Full Disk Access.** The onboarding wizard deep-links you to
+**System Settings → Privacy & Security → Full Disk Access** — toggle
+**Mac Cleaner Pro** on.
+
+Without it, a scan only sees a fraction of what's reclaimable.
+
+</td></tr>
+<tr><td align="center"><h3>3</h3></td><td>
+
+**Run Smart Scan.** Review the breakdown, untick anything you want to keep,
+then hit **Clean** — and use **Undo** if you change your mind.
+
+</td></tr>
+</table>
+
+> Full walkthrough, including uninstalling cleanly: **[docs/INSTALL.md](docs/INSTALL.md)**
+
+---
+
+## ✨ Features
+
+| Module | What it does |
+|---|---|
+| 🧹 **Smart Scan** | A parallel Swift `TaskGroup` sweep driven by **21 signed rules** — user caches, logs, Xcode DerivedData & device support, npm / yarn / Gradle / Maven / CocoaPods caches, Safari, Chrome & Firefox caches, Mail downloads. |
+| 📦 **Large & Old Files** | Pick any folder, filter by size and age, preview with **Quick Look** before you decide, then move to Trash. |
+| 🌌 **Space Lens** | Treemap **and** sunburst visualisers over a recursive, pausable disk scan — find the 40 GB folder you forgot about. |
+| 🧠 **Memory Manager** | Live RAM pressure gauge, top-consumer list, **Quick Free** (purge + pressure allocation) and Quit Selected. |
+| 🗑️ **App Uninstaller** | Drag-to-Trash leaves scraps behind. This finds them across **12 user-space** and **6 system-space** Library locations — containers, prefs, launch agents, HTTP storages, WebKit data and more. |
+| 👯 **Duplicate Finder** | Two-pass scan: bucket by size, then confirm with **SHA-256** — no false positives, and the newest copy is pre-selected as the keeper. |
+| 🛠️ **Developer Junk** | One pruned pass for `node_modules`, `.next`, `target`, `.gradle`, `Pods`, `__pycache__`, `venv`, `.tox` and friends — each confirmed by its sibling manifest (`package.json`, `Cargo.toml`, `Podfile`…) so nothing is guessed at. |
+| 📜 **Activity Log** | An append-only audit trail of every clean, undo and freed byte, stored as plain JSON at `~/Library/Application Support/MacCleanerPro/activity.json` — readable without the app. |
+
+> [!NOTE]
+> A few system-level items — system cache rules and system-space uninstaller
+> leftovers — are marked **"Requires helper"** in the UI and stay switched off
+> until the privileged helper ships. See [Ship status](#-ship-status).
+
+---
+
+## 🛡️ How deletion works
+
+The safety model is the whole point of the project, so it's worth being
+explicit about it:
+
+```
+  scan  ──▶  you review  ──▶  Clean  ──▶  ~/.Trash/MacCleanerPro/<UUID>/
+                                                      │
+                                         Undo ◀────────┘  (survives relaunch)
+```
+
+1. **Trash-first, always.** Files are *moved* (a rename, not a copy) into
+   `~/.Trash/MacCleanerPro/<UUID>/`. Nothing is ever `rm -rf`'d, including in
+   the developer-junk scanner.
+2. **Real Undo.** Each cleanup gets a token that is persisted to disk, so you
+   can restore an action even after quitting the app. Files stay recoverable
+   until you empty the Trash yourself.
+3. **Signed rules.** Rule packs say *which files may be deleted*, so they are
+   Ed25519-signed and verified against a public key compiled into the app —
+   a tampered pack is rejected outright. See
+   [docs/rule-pack-signing.md](docs/rule-pack-signing.md).
+4. **Conservative matching.** Uninstaller leftovers must match the app's bundle
+   ID or exact name; developer artifacts must have a confirming sibling
+   manifest. When in doubt, a rule is flagged **review recommended** rather than
+   pre-ticked.
+
+### 🔐 Privacy promise
+
+No telemetry. No analytics SDK. No crash reporter. No account. No file
+contents, paths, or scan results ever leave your machine — the rule pack is
+bundled with the app, so a fresh install has nothing to phone home to. The one
+piece of networking in the codebase is an optional revalidation call for legacy
+pre-open-source license keys, and since the whole app is in this repo, you
+don't have to take any of that on faith.
+
+---
+
+## 🔨 Build from source
+
+**Prerequisites:** Xcode 15.3 or later (Swift 5.10) and [XcodeGen](https://github.com/yonaskolb/XcodeGen).
 
 ```sh
-xcodegen generate     # regenerates MacCleanerPro.xcodeproj from project.yml
+brew install xcodegen
+git clone https://github.com/vunexolabs/mac-cleaner-pro.git
+cd mac-cleaner-pro
+
+xcodegen generate          # regenerates MacCleanerPro.xcodeproj from project.yml
 open MacCleanerPro.xcodeproj
 ```
 
-Or from the command line:
+Or stay in the terminal:
 
 ```sh
-xcodebuild -project MacCleanerPro.xcodeproj -scheme MacCleanerPro test   # run the test suite
-./tools/build-release.sh                                                # archive + DMG → out/
+# run the unit tests
+xcodebuild -project MacCleanerPro.xcodeproj -scheme MacCleanerPro test
+
+# archive + package a DMG into out/
+./tools/build-release.sh
 ```
 
-`*.xcodeproj/` is gitignored on purpose — it's generated from `project.yml`,
-never edited by hand. Any change to targets, sources, entitlements, or build
-phases goes through `project.yml`.
+> [!IMPORTANT]
+> `*.xcodeproj/` is gitignored on purpose — it is generated from
+> `project.yml`, never hand-edited. Any change to targets, sources,
+> entitlements or build phases goes through `project.yml`, then
+> `xcodegen generate`.
 
-## Architecture
+---
 
-Three-target build, all defined in `project.yml`:
+## 🧱 Architecture
 
-1. **`Core` framework** (`Core/` + `Shared/`) — pure Swift, no UI. Every
-   domain module lives here: `Scanner`, `RulesEngine`, `LargeFiles`,
-   `Uninstaller`, `DeletionService`, `ActivityLog`, `Licensing`,
-   `HelperBridge`, `Onboarding`, `Privacy`. All unit tests target this
-   framework (`Tests/CoreTests/`).
-2. **`MacCleanerPro` app** (`App/`) — the SwiftUI shell. Hardened Runtime,
-   not sandboxed (needs Full Disk Access).
-3. **`PrivilegedHelper` tool** (`PrivilegedHelper/` +
-   `Shared/HelperProtocol.swift`) — a root daemon registered via
-   `SMAppService.daemon`, XPC-only.
+Three targets, all declared in [`project.yml`](project.yml):
 
-See `docs/rule-pack-signing.md` for how the rule pack is signed/verified, and
-`docs/SHIP_READINESS.md` for the full feature/readiness matrix.
+```mermaid
+flowchart LR
+    A["<b>MacCleanerPro</b><br/>App/ · SwiftUI shell<br/>Hardened Runtime, not sandboxed"]
+    C["<b>Core</b> framework<br/>Core/ + Shared/<br/>pure Swift, no UI"]
+    H["<b>PrivilegedHelper</b><br/>root daemon via SMAppService<br/>XPC-only"]
+    R[("RulePacks/v1.json<br/>Ed25519-signed")]
+    T["Tests/CoreTests/"]
 
-## Ship status ($0-mode)
+    A -->|links| C
+    A -.->|XPC| H
+    C -->|verifies + loads| R
+    T -->|covers| C
+```
 
-This app currently ships **ad-hoc signed, not notarized** — it doesn't yet
-have a paid Apple Developer Program membership ($99/yr), so:
+| Layer | Lives in | Notes |
+|---|---|---|
+| **Core** | `Core/`, `Shared/` | Every domain module: `Scanner`, `RulesEngine`, `LargeFiles`, `SpaceLens`, `DuplicateFinder`, `DeveloperScanner`, `MemoryManager`, `Uninstaller`, `DeletionService`, `ActivityLog`, `HelperBridge`, `Onboarding`, `Privacy`. Pure Swift so it's testable without a host app. |
+| **App** | `App/` | SwiftUI views, design system, settings, onboarding. Hardened Runtime, *not* sandboxed (it needs Full Disk Access). |
+| **Helper** | `PrivilegedHelper/` | Root daemon registered through `SMAppService.daemon`; the XPC contract is `Shared/HelperProtocol.swift` and every path it touches is allowlisted. |
+| **Tests** | `Tests/CoreTests/` | Unit tests target the `Core` framework — 12 suites covering scanning, deletion, licensing, rule-pack verification and more. |
 
-- First launch needs a one-time right-click → Open (see `docs/INSTALL.md`).
-- The privileged helper (system-level cleanup) isn't wired up yet — it
-  requires a Developer ID-signed binary.
-- It's not on the Mac App Store yet.
+Deeper dives: [rule-pack signing](docs/rule-pack-signing.md) ·
+[feature/readiness matrix](docs/SHIP_READINESS.md)
 
-Getting to a notarized, App Store-ready build is exactly what
-[donations](#support-this-project) go toward.
+---
 
-## Contributing
+## 🚧 Ship status
 
-Contributions are very welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for
-dev setup, code style, and what's especially useful to work on as a single
-maintainer.
+This build ships **ad-hoc signed and not notarized**, because the project
+doesn't yet have a paid Apple Developer Program membership ($99/yr):
 
-## Support this project
+| | Status |
+|---|---|
+| First launch | One-time right-click → Open ([docs/INSTALL.md](docs/INSTALL.md)) |
+| Privileged helper (system-level cleanup) | ⏳ Needs a Developer ID-signed binary |
+| Notarization & Gatekeeper-clean launch | ⏳ Needs Developer Program membership |
+| Sparkle auto-updates / Mac App Store | ⏳ Planned after the above |
 
-Mac Cleaner Pro is free, with no ads, telemetry, or nagware. If it's useful
-to you, donations directly fund:
+Everything else runs today, in full. Closing those gaps is exactly what
+[support](#-support-the-project) goes toward.
 
-- The **Apple Developer Program** ($99/yr) needed for notarization and an
-  eventual Mac App Store listing.
-- **Server/hosting costs** for the licensing and download backend.
-- Time spent on maintenance, bug fixes, and new rule packs.
+---
 
-- GitHub Sponsors: [github.com/sponsors/vunexolabs](https://github.com/sponsors/vunexolabs)
-- Open Collective: [opencollective.com/mac-cleaner-pro](https://opencollective.com/mac-cleaner-pro)
-- Ko-fi: [ko-fi.com/vunexolabs](https://ko-fi.com/vunexolabs)
+## 🤝 Contributing
 
-*(Links go live once the accounts are set up — see the maintainer if any of
-these 404.)*
+Contributions genuinely move the needle on a solo-maintained project — a
+one-line fix counts.
 
-## Security
+Especially useful right now:
 
-Found a vulnerability? Please read [SECURITY.md](SECURITY.md) rather than
-opening a public issue.
+- 🧪 **Testing on hardware I don't have** (older Intel Macs, other macOS point releases)
+- 🧩 **New cleanup rules** for [`RulePacks/v1.json`](RulePacks/v1.json)
+- 🌍 **Localization**
+- 📝 **Docs fixes** and bug reports with a minimal repro
 
-## License
+Read [CONTRIBUTING.md](CONTRIBUTING.md) for dev setup, code style and the PR
+process, plus the [Code of Conduct](CODE_OF_CONDUCT.md).
 
-MIT — see [LICENSE](LICENSE). The "Mac Cleaner Pro" name and branding are
-not covered by the code license — see [NOTICE.md](NOTICE.md).
+---
+
+## 💛 Support the project
+
+Mac Cleaner Pro is free, with no ads, telemetry, or nagware. If it's useful to
+you, support funds the **Apple Developer Program** membership (notarization +
+the privileged helper), hosting for downloads, and time spent on maintenance
+and new rule packs.
+
+- ⭐ **Star this repo** — it's the cheapest way to help
+- 🐛 **File a good bug report**, or send a PR
+- 💌 **Sponsor:** GitHub Sponsors / Open Collective / Ko-fi accounts are still
+  being set up — until they're live, reach out at **hello@maccleanerpro.com**
+
+---
+
+## 🔐 Security
+
+Found a vulnerability? Please read **[SECURITY.md](SECURITY.md)** and report it
+privately rather than opening a public issue.
+
+## 📄 License
+
+[MIT](LICENSE). The "Mac Cleaner Pro" name, logo and branding are **not**
+covered by the code license — see [NOTICE.md](NOTICE.md).
+
+<div align="center">
+<br>
+Built with ❤️ for the Mac — <a href="https://github.com/vunexolabs">@vunexolabs</a>
+</div>
