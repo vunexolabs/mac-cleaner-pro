@@ -74,4 +74,41 @@ final class ScanEngineTests: XCTestCase {
         XCTAssertEqual(results[0].totalSize, 0)
         XCTAssertTrue(results[0].items.isEmpty)
     }
+
+    /// Cleaning moves each matched root whole, hidden children included, so the
+    /// size we advertise has to include them — otherwise every cache tree with
+    /// dot-prefixed internals (npm, Gradle, most browser profiles) reports less
+    /// than the clean actually reclaims.
+    func testHiddenChildrenCountTowardRuleSize() async throws {
+        let dir = tmp.appendingPathComponent("Caches/com.example.hidden")
+        try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        try Data(repeating: 0xAA, count: 4_096).write(to: dir.appendingPathComponent("visible.bin"))
+        try Data(repeating: 0xBB, count: 16_384).write(to: dir.appendingPathComponent(".hidden.bin"))
+
+        let pack = RulePack(
+            schemaVersion: 1,
+            packVersion: "1.0.0",
+            issuedAt: Date(),
+            minAppVersion: "1.0.0",
+            rules: [
+                RulePack.Rule(
+                    id: "test.hidden",
+                    category: .caches,
+                    displayName: "Hidden cache",
+                    description: "",
+                    safety: .safe,
+                    requiresHelper: false,
+                    paths: ["\(tmp.path)/Caches/*"],
+                    excludes: nil,
+                    olderThanDays: nil
+                )
+            ]
+        )
+
+        let results = await ScanEngine().scan(pack: pack)
+        XCTAssertEqual(results.count, 1)
+        XCTAssertGreaterThanOrEqual(
+            results[0].totalSize, UInt64(4_096 + 16_384),
+            "hidden children must be counted — they are moved by the clean either way")
+    }
 }

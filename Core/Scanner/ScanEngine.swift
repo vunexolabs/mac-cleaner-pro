@@ -150,7 +150,7 @@ public actor ScanEngine {
 
         for root in roots {
             if Task.isCancelled { break }
-            let (size, mtime) = sizeAndModified(of: root, aggregator: aggregator)
+            let (size, mtime) = await sizeAndModified(of: root, aggregator: aggregator)
             if let cutoff, let mtime, mtime > cutoff { continue }
             items.append(ScanItem(url: root, size: size, modifiedAt: mtime))
             total &+= size
@@ -172,12 +172,16 @@ public actor ScanEngine {
     }
 
     /// Total file-allocated size + most-recent mtime of `url`. Recurses into
-    /// directories using `FileManager.enumerator`. Hidden files are skipped to
-    /// match user expectations and avoid touching state like `.DS_Store`.
+    /// directories using `FileManager.enumerator`.
+    ///
+    /// Hidden children are counted. Cleaning moves each root directory whole,
+    /// so excluding dotfiles here would report less than the clean actually
+    /// reclaims — and cache trees are full of them (`.lock`, `.cache`, and the
+    /// dot-prefixed subtrees npm and Gradle keep).
     private static func sizeAndModified(
         of url: URL,
         aggregator: ProgressAggregator? = nil
-    ) -> (UInt64, Date?) {
+    ) async -> (UInt64, Date?) {
         let keys: [URLResourceKey] = [
             .totalFileAllocatedSizeKey, .isDirectoryKey, .contentModificationDateKey
         ]
@@ -190,8 +194,7 @@ public actor ScanEngine {
             var counter: Int = 0
             if let enumerator = FileManager.default.enumerator(
                 at: url,
-                includingPropertiesForKeys: keys,
-                options: [.skipsHiddenFiles]
+                includingPropertiesForKeys: keys
             ) {
                 for case let child as URL in enumerator {
                     if Task.isCancelled { break }
@@ -203,35 +206,24 @@ public actor ScanEngine {
                     }
                     counter &+= 1
                     // Mid-walk path sample roughly every 128 files — purely
-                    // for the UI's live-stream panel. We don't emit progress
-                    // updates here to avoid double-counting with the per-root
-                    // delta below.
+                    // for the UI's live-stream panel. Awaited straight through
+                    // to the aggregator: a detached task per sample spawned
+                    // thousands of one-shot tasks on a large scan. We don't emit
+                    // progress updates here to avoid double-counting with the
+                    // per-root delta below.
                     if let aggregator, counter % 128 == 0 {
-                        let path = child.path
-                        Task.detached(priority: .userInitiated) {
-                            await aggregator.fileSampled(path: path, size: childSize)
-                        }
+                        await aggregator.fileSampled(path: child.path, size: childSize)
                     }
                 }
             }
             // Single delta per root — accurate, no double counting.
-            if let aggregator {
-                let bytes = total
-                let files = counter
-                Task.detached(priority: .userInitiated) {
-                    await aggregator.deltaProgress(addBytes: bytes, addFiles: files)
-                }
-            }
+            await aggregator?.deltaProgress(addBytes: total, addFiles: counter)
             return (total, newest)
         } else {
             // Single file root.
-            if let aggregator {
-                let bytes = UInt64(values.totalFileAllocatedSize ?? 0)
-                Task.detached(priority: .userInitiated) {
-                    await aggregator.deltaProgress(addBytes: bytes, addFiles: 1)
-                }
-            }
-            return (UInt64(values.totalFileAllocatedSize ?? 0), values.contentModificationDate)
+            let bytes = UInt64(values.totalFileAllocatedSize ?? 0)
+            await aggregator?.deltaProgress(addBytes: bytes, addFiles: 1)
+            return (bytes, values.contentModificationDate)
         }
     }
 }

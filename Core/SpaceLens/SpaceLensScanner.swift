@@ -25,7 +25,8 @@ public struct SpaceLensNode: Identifiable, Sendable, Hashable {
 }
 
 /// Walks a directory tree and produces a sized `SpaceLensNode` tree suitable
-/// for treemap visualization. Honors cancellation and skips hidden files.
+/// for treemap visualization. Honors cancellation, and counts hidden entries so
+/// the totals agree with Finder's.
 public actor SpaceLensScanner {
 
     /// Snapshot delivered to subscribers as the scan progresses. Lets the UI
@@ -88,11 +89,14 @@ public actor SpaceLensScanner {
         }
 
         // Recurse.
+        // Hidden entries are included: a directory's size is the sum of its
+        // children, so skipping dotfiles would make every ancestor total read
+        // low — and the dot-prefixed caches under ~/Library and ~/ are often
+        // exactly the space the user came here to find.
         var children: [SpaceLensNode] = []
         if let contents = try? FileManager.default.contentsOfDirectory(
             at: url,
-            includingPropertiesForKeys: keys,
-            options: [.skipsHiddenFiles]
+            includingPropertiesForKeys: keys
         ) {
             for child in contents {
                 if Task.isCancelled { break }
@@ -110,13 +114,16 @@ public actor SpaceLensScanner {
     /// Recursively totals the allocated bytes inside a directory (or bundle).
     /// Used for `.app`, `.framework`, and symlink leaves where we don't want to
     /// expand children but still want a meaningful size.
+    ///
+    /// Counts hidden children: a bundle's dot-prefixed internals are real bytes
+    /// on disk, and a size that disagrees with Finder's is worse than useless in
+    /// a tool whose whole job is accounting for space.
     private static func directoryAllocatedSize(of url: URL) -> UInt64 {
         let keys: [URLResourceKey] = [.totalFileAllocatedSizeKey]
         var total: UInt64 = 0
         guard let enumerator = FileManager.default.enumerator(
             at: url,
-            includingPropertiesForKeys: keys,
-            options: [.skipsHiddenFiles]
+            includingPropertiesForKeys: keys
         ) else { return 0 }
         for case let child as URL in enumerator {
             if Task.isCancelled { break }

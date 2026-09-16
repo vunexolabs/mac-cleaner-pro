@@ -68,6 +68,11 @@ final class SmartScanModel: ObservableObject {
                     }
                 }
             }
+            // A cancelled scan returns whatever it had walked so far. Publishing
+            // that would present a partial figure as a finished one — the user
+            // hit Cancel and would still be shown a confident "reclaimable" total.
+            if Task.isCancelled { return }
+
             await MainActor.run {
                 self.results = scanned
                 self.selected = Set(scanned.filter { $0.safety == .safe }.map(\.ruleID))

@@ -137,8 +137,20 @@ public actor DeletionService {
         return msg
     }
 
-    /// Restore every entry in `token` to its original URL. Fails fast if the
-    /// original location has been re-occupied — we never overwrite live state.
+    /// Restore every entry in `token` to its original URL. Never overwrites live
+    /// state, and never leaves a half-restored tree behind.
+    ///
+    /// Validation runs over **every** entry before the first file moves. The
+    /// previous version validated inside the move loop, so an entry whose
+    /// original had been re-occupied aborted the restore with earlier entries
+    /// already moved back and no record of which ones — the user was left
+    /// halfway, with the same error either way. Now a conflict means nothing
+    /// moved, and retrying after clearing the conflict restores the whole set.
+    ///
+    /// An I/O failure partway through is still possible (a volume disappearing
+    /// mid-restore); those are collected rather than thrown at first sight, so
+    /// the remaining entries still get their chance, and the token is kept so
+    /// the user can retry what's left.
     public func undo(_ token: UndoToken) async throws {
         if tokens[token.id] == nil {
             // Allow undoing a token loaded from disk on a later launch.
@@ -146,6 +158,7 @@ public actor DeletionService {
             guard tokens[token.id] != nil else { throw DeletionError.unknownToken(token.id) }
         }
 
+        // Preflight: nothing moves until every entry is known-restorable.
         for entry in token.entries {
             guard fm.fileExists(atPath: entry.staged.path) else {
                 throw DeletionError.sourceMissing(entry.staged)
@@ -153,24 +166,39 @@ public actor DeletionService {
             if fm.fileExists(atPath: entry.original.path) {
                 throw DeletionError.originalReoccupied(entry.original)
             }
+        }
+
+        var restored = 0
+        var failures: [String] = []
+        for entry in token.entries {
             do {
                 try fm.createDirectory(
                     at: entry.original.deletingLastPathComponent(),
                     withIntermediateDirectories: true
                 )
                 try fm.moveItem(at: entry.staged, to: entry.original)
+                restored += 1
             } catch {
-                throw DeletionError.ioFailure(underlying: error.localizedDescription)
+                failures.append("\(entry.original.lastPathComponent): \(Self.shortReason(from: error))")
             }
+        }
+
+        await ActivityLog.shared.append(ActivityEntry(
+            kind: .undo, source: .manual, bytes: token.totalBytes,
+            itemCount: restored, tokenID: token.id,
+            note: failures.isEmpty ? nil : "\(failures.count) item(s) could not be restored"))
+
+        guard failures.isEmpty else {
+            // Keep the token and its staging dir so the rest can be retried.
+            throw DeletionError.ioFailure(
+                underlying: "Restored \(restored) of \(token.entries.count). "
+                    + failures.prefix(3).joined(separator: "; "))
         }
 
         // Best-effort cleanup of now-empty staging directory + on-disk token.
         try? fm.removeItem(at: token.stagingDir)
         try? fm.removeItem(at: tokenFile(for: token.id))
         tokens.removeValue(forKey: token.id)
-        await ActivityLog.shared.append(ActivityEntry(
-            kind: .undo, source: .manual, bytes: token.totalBytes,
-            itemCount: token.entries.count, tokenID: token.id))
     }
 
     /// Permanently delete everything in `token` — staging dir and on-disk record.
@@ -350,10 +378,12 @@ public actor DeletionService {
         let values = try url.resourceValues(forKeys: keys)
         if values.isDirectory == true {
             var total: UInt64 = 0
+            // No .skipsHiddenFiles: we moved the directory whole, hidden
+            // children included, so the byte count has to include them too —
+            // otherwise the Activity Log under-reports what was reclaimed.
             if let enumerator = FileManager.default.enumerator(
                 at: url,
-                includingPropertiesForKeys: Array(keys),
-                options: [.skipsHiddenFiles]
+                includingPropertiesForKeys: Array(keys)
             ) {
                 for case let child as URL in enumerator {
                     if let s = try? child.resourceValues(forKeys: keys).totalFileAllocatedSize {
