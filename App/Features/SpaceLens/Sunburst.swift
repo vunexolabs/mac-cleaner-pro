@@ -149,7 +149,37 @@ struct SunburstView: View {
             }
             .compositingGroup()
             .animation(.easeOut(duration: 0.25), value: focus.id)
+            // The wheel is a Canvas with a pointer-driven hit overlay, so it is
+            // unreachable without a mouse: nothing to focus, nothing to read.
+            // Swap in a real control tree for assistive tech — same data, same
+            // actions, navigable by keyboard and VoiceOver.
+            .accessibilityRepresentation { accessibleWheel }
         }
+    }
+
+    // MARK: Accessible equivalent
+
+    /// A button per first-level slice, largest first, each announcing its share
+    /// of the parent. Activating drills in, exactly like clicking the slice.
+    private var accessibleWheel: some View {
+        let total = max(UInt64(1), focus.size)
+        return VStack(alignment: .leading, spacing: 0) {
+            if canAscend {
+                Button("Go up to the enclosing folder", action: onAscend)
+            }
+            Text("\(focus.name.isEmpty ? "Root" : focus.name), \(byteString(focus.size)) across \(focus.children.count) items")
+                .accessibilityAddTraits(.isHeader)
+            ForEach(focus.children) { child in
+                let share = Int((Double(child.size) / Double(total) * 100).rounded())
+                Button {
+                    onSelect(child)
+                    onDrill(child)
+                } label: {
+                    Text("\(child.name), \(byteString(child.size)), \(share) percent")
+                }
+            }
+        }
+        .accessibilityLabel("Disk usage for \(focus.name.isEmpty ? "root" : focus.name)")
     }
 
     // MARK: Center hub

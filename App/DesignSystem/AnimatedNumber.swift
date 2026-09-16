@@ -14,9 +14,15 @@ struct AnimatedByteCount: View, Animatable {
 
     var body: some View {
         let bytes = max(0, Int64(value))
-        Text(ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file))
+        let formatted = ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
+        Text(formatted)
             .font(font)
             .foregroundStyle(color)
             .monospacedDigit()
+            // The text changes on every frame of the tween. Without this,
+            // VoiceOver chases the animation and reads a stream of partial
+            // numbers; the value is what matters, so announce only that.
+            .accessibilityValue(formatted)
+            .accessibilityAddTraits(.updatesFrequently)
     }
 }

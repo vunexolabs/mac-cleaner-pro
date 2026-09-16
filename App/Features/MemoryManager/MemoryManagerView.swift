@@ -427,6 +427,18 @@ struct MemoryManagerView: View {
 private struct MemoryStackedBar: View {
     let stats: MemoryStats
 
+    /// Spoken form of the breakdown the bar draws — without it the bar is a
+    /// row of anonymous coloured rectangles with no label, value or text.
+    private var spokenBreakdown: String {
+        func b(_ v: UInt64) -> String {
+            ByteCountFormatter.string(fromByteCount: Int64(v), countStyle: .memory)
+        }
+        return "\(b(stats.usedBytes)) of \(b(stats.totalBytes)) used. "
+            + "App \(b(stats.appBytes)), wired \(b(stats.wiredBytes)), "
+            + "compressed \(b(stats.compressedBytes)), cached \(b(stats.cachedBytes)), "
+            + "free \(b(stats.freeBytes))."
+    }
+
     var body: some View {
         GeometryReader { geo in
             let total = max(1, Double(stats.totalBytes))
@@ -453,6 +465,9 @@ private struct MemoryStackedBar: View {
             )
             .animation(.easeOut(duration: 0.4), value: stats.usedBytes)
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Memory usage")
+        .accessibilityValue(spokenBreakdown)
     }
 }
 
@@ -460,12 +475,16 @@ private struct LegendDot: View {
     let color: Color
     let label: String
     let value: String
+    /// Combined so VoiceOver reads "App, 5.2 GB" rather than stopping on the
+    /// colour swatch, the word, and the number as three separate elements.
     var body: some View {
         HStack(spacing: 6) {
             Circle().fill(color).frame(width: 8, height: 8)
+                .accessibilityHidden(true)
             Text(label).foregroundStyle(.secondary)
             Text(value).foregroundStyle(.primary).monospacedDigit()
         }
+        .accessibilityElement(children: .combine)
     }
 }
 

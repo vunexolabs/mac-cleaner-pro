@@ -589,6 +589,9 @@ private struct ChildListRow: View {
                     }
                     .buttonStyle(.plain)
                     .opacity(isHovering ? 1.0 : 0.4)
+                    // Only visible on hover, so a pointer-free user would never
+                    // find it; the row's custom action below covers that too.
+                    .accessibilityLabel("Open \(child.name)")
                 }
             }
             .padding(.horizontal, 8)
@@ -608,6 +611,19 @@ private struct ChildListRow: View {
         .buttonStyle(.plain)
         .onHover { onHoverChange($0) }
         .simultaneousGesture(TapGesture(count: 2).onEnded { onDrill() })
+        // Read as one row, and expose drilling — which is otherwise a
+        // double-click or a hover-only chevron — as a named action.
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(spokenLabel)
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+        .accessibilityAction(named: "Open") { onDrill() }
+    }
+
+    private var spokenLabel: String {
+        let kind = child.isDirectory
+            ? "folder, \(child.children.count) item\(child.children.count == 1 ? "" : "s")"
+            : "file"
+        return "\(child.name), \(kind), \(byteString(child.size))"
     }
 }
 

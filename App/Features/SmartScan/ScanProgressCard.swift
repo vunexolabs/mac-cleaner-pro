@@ -180,6 +180,10 @@ struct ScanProgressCard: View {
                     .animation(.easeOut(duration: 0.25), value: streamSubtitle)
             }
 
+            // Paths fly past several times a second. Announcing them would bury
+            // the user in chatter and never settle; the rule-by-rule progress
+            // above carries the same information at a readable pace, so this
+            // panel is presentation only.
             VStack(alignment: .leading, spacing: 0) {
                 let displayed = Array(model.liveStreamPaths.suffix(5).enumerated())
                 if displayed.isEmpty {
@@ -220,6 +224,7 @@ struct ScanProgressCard: View {
                     .strokeBorder(Theme.border.opacity(0.6), lineWidth: 1)
             )
             .clipped()
+            .accessibilityHidden(true)
         }
     }
 
