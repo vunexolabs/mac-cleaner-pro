@@ -1,6 +1,9 @@
 import Foundation
 import Darwin
 import Darwin.Mach
+#if canImport(AppKit)
+import AppKit   // NSRunningApplication — graceful quit, not a bare SIGTERM
+#endif
 
 /// Orchestrates RAM-reclamation actions with aggressive strategies for real memory freeing.
 ///
@@ -88,15 +91,37 @@ public actor MemoryFreer {
         )
     }
 
-    /// Sends `SIGTERM` (or `SIGKILL` if `force`) to each pid. Returns the count
-    /// successfully signaled.
+    /// Asks each pid to quit, preferring the graceful path. Returns the count
+    /// successfully asked.
+    ///
+    /// For a GUI app we go through `NSRunningApplication.terminate()`, which
+    /// sends the same Apple Event ⌘Q does: the app gets to flush state and put
+    /// up its "save changes?" sheet. Signalling `SIGTERM` straight at a Cocoa
+    /// app skips all of that — most AppKit apps have no `SIGTERM` handler, so
+    /// the process dies where it stands and unsaved documents go with it. A
+    /// RAM-cleanup button is not worth someone's unsaved work.
+    ///
+    /// `force` is the escape hatch for an app that ignores the polite request:
+    /// `forceTerminate()` (SIGKILL under the hood) with no chance to save. The
+    /// UI must make that distinction explicit before calling this.
+    ///
+    /// Non-GUI processes have no NSRunningApplication, so they still get a
+    /// signal — `SIGTERM` by default, which well-behaved daemons do handle.
     public func terminate(pids: [pid_t], force: Bool = false) -> Int {
-        let signal: Int32 = force ? SIGKILL : SIGTERM
         var ok = 0
         for pid in pids where pid > 0 {
-            if kill(pid, signal) == 0 { ok += 1 }
+            if terminateOne(pid: pid, force: force) { ok += 1 }
         }
         return ok
+    }
+
+    private func terminateOne(pid: pid_t, force: Bool) -> Bool {
+        #if canImport(AppKit)
+        if let app = NSRunningApplication(processIdentifier: pid) {
+            return force ? app.forceTerminate() : app.terminate()
+        }
+        #endif
+        return kill(pid, force ? SIGKILL : SIGTERM) == 0
     }
 
     /// Quit selected processes, then run full memory reclamation to reclaim

@@ -69,12 +69,55 @@ final class MemoryManagerModel: ObservableObject {
         await onFreeFinished(result, label: auto ? "Auto Quick Free" : "Quick Free")
     }
 
-    func quitSelected(force: Bool = false) async {
+    /// What the confirmation sheet is asking about. Quitting apps can destroy
+    /// unsaved work, so it never happens on a single click.
+    struct PendingQuit: Identifiable {
+        let id = UUID()
+        let pids: [pid_t]
+        let names: [String]
+
+        var title: String {
+            pids.count == 1 ? "Quit \(names.first ?? "this app")?" : "Quit \(pids.count) apps?"
+        }
+
+        /// Up to three names, then "and N more" — enough to recognise a mistake
+        /// without an unbounded wall of text.
+        var summary: String {
+            let shown = names.prefix(3).joined(separator: ", ")
+            let extra = names.count - min(names.count, 3)
+            let list = extra > 0 ? "\(shown) and \(extra) more" : shown
+            return "Mac Cleaner Pro will ask \(list) to quit. "
+                + "Anything with unsaved changes will prompt you to save first."
+        }
+    }
+
+    @Published var pendingQuit: PendingQuit?
+
+    /// Stage a confirmation instead of quitting immediately.
+    func requestQuitSelected() {
         guard !isFreeing else { return }
-        let pids = Array(selectedPIDs)
+        let selected = processes.filter { selectedPIDs.contains($0.id) }
+        guard !selected.isEmpty else { return }
+        pendingQuit = PendingQuit(pids: selected.map(\.id), names: selected.map(\.name))
+    }
+
+    func confirmPendingQuit(force: Bool) {
+        guard let pending = pendingQuit else { return }
+        pendingQuit = nil
+        Task { await quitSelected(pids: pending.pids, force: force) }
+    }
+
+    func quitSelected(pids: [pid_t], force: Bool = false) async {
+        guard !isFreeing else { return }
         guard !pids.isEmpty else { return }
         isFreeing = true
-        actionMessage = "Quitting \(pids.count) app\(pids.count == 1 ? "" : "s") and reclaiming…"
+        let plural = pids.count == 1 ? "" : "s"
+        // "Asking" rather than "Quitting": a graceful quit can be refused by an
+        // app that puts up a save prompt, and claiming otherwise would be a lie
+        // the very next frame.
+        actionMessage = force
+            ? "Force-quitting \(pids.count) app\(plural) and reclaiming…"
+            : "Asking \(pids.count) app\(plural) to quit, then reclaiming…"
         let result = await MemoryFreer.shared.quitAndFree(pids: pids, force: force)
         selectedPIDs.removeAll()
         await onFreeFinished(result, label: force ? "Force Quit + Free" : "Quit + Free")
@@ -229,7 +272,7 @@ struct MemoryManagerView: View {
                 .disabled(model.isFreeing || !gate.canCleanNow)
 
                 Button {
-                    Task { await model.quitSelected(force: false) }
+                    model.requestQuitSelected()
                 } label: {
                     HStack(spacing: 8) {
                         Image(systemName: "xmark.circle")
@@ -238,6 +281,25 @@ struct MemoryManagerView: View {
                 }
                 .buttonStyle(SoftButtonStyle())
                 .disabled(model.isFreeing || model.selectedPIDs.isEmpty || !gate.canCleanNow)
+                .confirmationDialog(
+                    model.pendingQuit?.title ?? "",
+                    isPresented: Binding(
+                        get: { model.pendingQuit != nil },
+                        set: { if !$0 { model.pendingQuit = nil } }
+                    ),
+                    titleVisibility: .visible,
+                    presenting: model.pendingQuit
+                ) { pending in
+                    Button("Quit App\(pending.pids.count == 1 ? "" : "s")") {
+                        model.confirmPendingQuit(force: false)
+                    }
+                    Button("Force Quit — unsaved work is lost", role: .destructive) {
+                        model.confirmPendingQuit(force: true)
+                    }
+                    Button("Cancel", role: .cancel) { model.pendingQuit = nil }
+                } message: { pending in
+                    Text(pending.summary)
+                }
 
                 Spacer()
 
