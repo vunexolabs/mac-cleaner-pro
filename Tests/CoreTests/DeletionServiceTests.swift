@@ -173,6 +173,60 @@ final class DeletionServiceTests: XCTestCase {
         XCTAssertTrue(remaining.isEmpty)
     }
 
+    // MARK: - Undo is all-or-nothing
+
+    /// A conflict on any entry must leave *every* entry where it was. The old
+    /// loop validated as it went, so entries before the conflict were already
+    /// moved back — a half-restored tree, reported as a plain error.
+    func testUndoConflictRestoresNothing() async throws {
+        let first  = try touch("first.bin")
+        let second = try touch("second.bin")
+        let firstPath = first.path
+
+        let svc = DeletionService()
+        let token = try await svc.trash(urls: [first, second])
+        XCTAssertEqual(token.entries.count, 2)
+
+        // Re-occupy the *second* original; the first is still clear.
+        try Data().write(to: second)
+
+        do {
+            try await svc.undo(token)
+            XCTFail("expected originalReoccupied")
+        } catch DeletionError.originalReoccupied {
+            // Expected.
+        }
+
+        XCTAssertFalse(fm.fileExists(atPath: firstPath),
+                       "no entry may be restored when another entry conflicts")
+        let stillStaged = await svc.isRestorable(token.id)
+        XCTAssertTrue(stillStaged, "the token survives so the user can retry")
+
+        // Clearing the conflict lets the whole set restore.
+        try fm.removeItem(at: second)
+        try await svc.undo(token)
+        XCTAssertTrue(fm.fileExists(atPath: firstPath))
+        XCTAssertTrue(fm.fileExists(atPath: second.path))
+    }
+
+    // MARK: - Byte accounting
+
+    /// `trash` moves directories whole, so the reported size must include the
+    /// hidden children that went with them.
+    func testStagedSizeIncludesHiddenChildren() async throws {
+        let dir = tmp.appendingPathComponent("cachedir")
+        try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        try Data(repeating: 0xAA, count: 4_096).write(to: dir.appendingPathComponent("visible.bin"))
+        try Data(repeating: 0xBB, count: 16_384).write(to: dir.appendingPathComponent(".hidden.bin"))
+
+        let svc = DeletionService()
+        let token = try await svc.trash(urls: [dir])
+        XCTAssertGreaterThanOrEqual(token.totalBytes, UInt64(4_096 + 16_384),
+                                    "hidden children moved with the directory must be counted")
+
+        try await svc.empty(token)
+    }
+
     func testRetentionWindowIsThirtyDays() {
         XCTAssertEqual(DeletionService.retentionDays, 30,
                        "onboarding and Smart Scan both promise a 30-day undo window")

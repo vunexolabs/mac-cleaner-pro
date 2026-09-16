@@ -64,17 +64,62 @@ final class MemoryManagerModel: ObservableObject {
     func runQuickFree(auto: Bool = false) async {
         guard !isFreeing else { return }
         isFreeing = true
-        actionMessage = auto ? "Auto: pressure critical — running Quick Free" : "Freeing RAM with aggressive cleanup…"
+        actionMessage = auto
+            ? "Auto: pressure critical — running Quick Free"
+            : "Applying memory pressure so the kernel drops cached pages…"
         let result = await MemoryFreer.shared.quickFree()
         await onFreeFinished(result, label: auto ? "Auto Quick Free" : "Quick Free")
     }
 
-    func quitSelected(force: Bool = false) async {
+    /// What the confirmation sheet is asking about. Quitting apps can destroy
+    /// unsaved work, so it never happens on a single click.
+    struct PendingQuit: Identifiable {
+        let id = UUID()
+        let pids: [pid_t]
+        let names: [String]
+
+        var title: String {
+            pids.count == 1 ? "Quit \(names.first ?? "this app")?" : "Quit \(pids.count) apps?"
+        }
+
+        /// Up to three names, then "and N more" — enough to recognise a mistake
+        /// without an unbounded wall of text.
+        var summary: String {
+            let shown = names.prefix(3).joined(separator: ", ")
+            let extra = names.count - min(names.count, 3)
+            let list = extra > 0 ? "\(shown) and \(extra) more" : shown
+            return "Mac Cleaner Pro will ask \(list) to quit. "
+                + "Anything with unsaved changes will prompt you to save first."
+        }
+    }
+
+    @Published var pendingQuit: PendingQuit?
+
+    /// Stage a confirmation instead of quitting immediately.
+    func requestQuitSelected() {
         guard !isFreeing else { return }
-        let pids = Array(selectedPIDs)
+        let selected = processes.filter { selectedPIDs.contains($0.id) }
+        guard !selected.isEmpty else { return }
+        pendingQuit = PendingQuit(pids: selected.map(\.id), names: selected.map(\.name))
+    }
+
+    func confirmPendingQuit(force: Bool) {
+        guard let pending = pendingQuit else { return }
+        pendingQuit = nil
+        Task { await quitSelected(pids: pending.pids, force: force) }
+    }
+
+    func quitSelected(pids: [pid_t], force: Bool = false) async {
+        guard !isFreeing else { return }
         guard !pids.isEmpty else { return }
         isFreeing = true
-        actionMessage = "Quitting \(pids.count) app\(pids.count == 1 ? "" : "s") and reclaiming…"
+        let plural = pids.count == 1 ? "" : "s"
+        // "Asking" rather than "Quitting": a graceful quit can be refused by an
+        // app that puts up a save prompt, and claiming otherwise would be a lie
+        // the very next frame.
+        actionMessage = force
+            ? "Force-quitting \(pids.count) app\(plural) and reclaiming…"
+            : "Asking \(pids.count) app\(plural) to quit, then reclaiming…"
         let result = await MemoryFreer.shared.quitAndFree(pids: pids, force: force)
         selectedPIDs.removeAll()
         await onFreeFinished(result, label: force ? "Force Quit + Free" : "Quit + Free")
@@ -96,12 +141,23 @@ final class MemoryManagerModel: ObservableObject {
     }
 
     private func format(result: FreeResult, label: String) -> String {
+        // A deliberate skip is the most useful thing we can say — report it
+        // instead of a cheerful total the user didn't get.
+        if let skipped = result.skippedReason {
+            if result.processesTerminated > 0 {
+                let n = result.processesTerminated
+                return "\(label): \(n) app\(n == 1 ? "" : "s") asked to quit. \(skipped)"
+            }
+            return "\(label): \(skipped)"
+        }
+
         let f = ByteCountFormatter()
         f.countStyle = .memory
         f.allowedUnits = [.useGB, .useMB]
         var parts: [String] = []
         if result.processesTerminated > 0 {
-            parts.append("\(result.processesTerminated) app\(result.processesTerminated == 1 ? "" : "s") quit")
+            let n = result.processesTerminated
+            parts.append("\(n) app\(n == 1 ? "" : "s") asked to quit")
         }
         if result.reclaimedBytes > 0 {
             parts.append("\(f.string(fromByteCount: Int64(result.reclaimedBytes))) freed")
@@ -115,8 +171,10 @@ final class MemoryManagerModel: ObservableObject {
             parts.append("−\(f.string(fromByteCount: Int64(bytes))) swap")
         }
         if parts.isEmpty {
-            // Even if no delta, we still ran aggressive cleanup
-            return "\(label): RAM optimized · purgeable memory cleared"
+            // No delta means the kernel had nothing worth evicting. Saying so is
+            // better than inventing an accomplishment — the previous copy
+            // claimed "purgeable memory cleared" by a routine that never ran.
+            return "\(label): nothing worth reclaiming — your memory is already in good shape"
         }
         return "\(label): " + parts.joined(separator: " · ")
     }
@@ -229,7 +287,7 @@ struct MemoryManagerView: View {
                 .disabled(model.isFreeing || !gate.canCleanNow)
 
                 Button {
-                    Task { await model.quitSelected(force: false) }
+                    model.requestQuitSelected()
                 } label: {
                     HStack(spacing: 8) {
                         Image(systemName: "xmark.circle")
@@ -238,6 +296,25 @@ struct MemoryManagerView: View {
                 }
                 .buttonStyle(SoftButtonStyle())
                 .disabled(model.isFreeing || model.selectedPIDs.isEmpty || !gate.canCleanNow)
+                .confirmationDialog(
+                    model.pendingQuit?.title ?? "",
+                    isPresented: Binding(
+                        get: { model.pendingQuit != nil },
+                        set: { if !$0 { model.pendingQuit = nil } }
+                    ),
+                    titleVisibility: .visible,
+                    presenting: model.pendingQuit
+                ) { pending in
+                    Button("Quit App\(pending.pids.count == 1 ? "" : "s")") {
+                        model.confirmPendingQuit(force: false)
+                    }
+                    Button("Force Quit — unsaved work is lost", role: .destructive) {
+                        model.confirmPendingQuit(force: true)
+                    }
+                    Button("Cancel", role: .cancel) { model.pendingQuit = nil }
+                } message: { pending in
+                    Text(pending.summary)
+                }
 
                 Spacer()
 
@@ -350,6 +427,18 @@ struct MemoryManagerView: View {
 private struct MemoryStackedBar: View {
     let stats: MemoryStats
 
+    /// Spoken form of the breakdown the bar draws — without it the bar is a
+    /// row of anonymous coloured rectangles with no label, value or text.
+    private var spokenBreakdown: String {
+        func b(_ v: UInt64) -> String {
+            ByteCountFormatter.string(fromByteCount: Int64(v), countStyle: .memory)
+        }
+        return "\(b(stats.usedBytes)) of \(b(stats.totalBytes)) used. "
+            + "App \(b(stats.appBytes)), wired \(b(stats.wiredBytes)), "
+            + "compressed \(b(stats.compressedBytes)), cached \(b(stats.cachedBytes)), "
+            + "free \(b(stats.freeBytes))."
+    }
+
     var body: some View {
         GeometryReader { geo in
             let total = max(1, Double(stats.totalBytes))
@@ -376,6 +465,9 @@ private struct MemoryStackedBar: View {
             )
             .animation(.easeOut(duration: 0.4), value: stats.usedBytes)
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Memory usage")
+        .accessibilityValue(spokenBreakdown)
     }
 }
 
@@ -383,12 +475,16 @@ private struct LegendDot: View {
     let color: Color
     let label: String
     let value: String
+    /// Combined so VoiceOver reads "App, 5.2 GB" rather than stopping on the
+    /// colour swatch, the word, and the number as three separate elements.
     var body: some View {
         HStack(spacing: 6) {
             Circle().fill(color).frame(width: 8, height: 8)
+                .accessibilityHidden(true)
             Text(label).foregroundStyle(.secondary)
             Text(value).foregroundStyle(.primary).monospacedDigit()
         }
+        .accessibilityElement(children: .combine)
     }
 }
 

@@ -138,8 +138,28 @@ final class SpaceLensModel: ObservableObject {
 
 // MARK: - View
 
+/// Which visualiser the chart panel shows. Both read the same tree and share
+/// the same hover/selection bindings, so switching keeps your place.
+enum SpaceLensChart: String, CaseIterable, Identifiable {
+    case sunburst, treemap
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .sunburst: return "Sunburst"
+        case .treemap:  return "Treemap"
+        }
+    }
+    var systemImage: String {
+        switch self {
+        case .sunburst: return "chart.pie"
+        case .treemap:  return "square.grid.2x2"
+        }
+    }
+}
+
 struct SpaceLensView: View {
     @StateObject private var model = SpaceLensModel()
+    @AppStorage("MCP-SpaceLens-Chart") private var chart: SpaceLensChart = .sunburst
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -150,7 +170,7 @@ struct SpaceLensView: View {
             } else if model.isScanning && model.tree == nil {
                 scanningState
             } else {
-                treemapSection
+                chartSection
             }
             if model.lastUndoToken != nil { undoBanner }
             else if let msg = model.actionMessage {
@@ -166,7 +186,7 @@ struct SpaceLensView: View {
 
     private var header: some View {
         SectionHeader(
-            eyebrow: "Treemap of every byte",
+            eyebrow: "Every byte, mapped",
             title: "Space Lens",
             subtitle: "See where your disk is going. Drill in, reclaim out."
         )
@@ -223,7 +243,7 @@ struct SpaceLensView: View {
                     Text("Visualize every byte on your disk")
                         .font(.system(size: 22, weight: .semibold))
                         .tracking(-0.3)
-                    Text("A live treemap of any folder — click to drill in, right-click to clean.")
+                    Text("A live treemap or sunburst of any folder — click to drill in, right-click to clean.")
                         .font(.system(size: 13))
                         .foregroundStyle(.secondary)
                 }
@@ -272,13 +292,17 @@ struct SpaceLensView: View {
         .glassCard(padded: false)
     }
 
-    // MARK: Treemap section
+    // MARK: Chart section
 
-    private var treemapSection: some View {
+    private var chartSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            breadcrumb
+            HStack(alignment: .center) {
+                breadcrumb
+                Spacer(minLength: 12)
+                chartPicker
+            }
             HStack(alignment: .top, spacing: 14) {
-                sunburstPanel
+                chartPanel
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 rightSidebar
                     .frame(width: 280)
@@ -287,28 +311,58 @@ struct SpaceLensView: View {
         }
     }
 
-    private var sunburstPanel: some View {
+    private var chartPicker: some View {
+        Picker("Chart", selection: $chart) {
+            ForEach(SpaceLensChart.allCases) { mode in
+                Label(mode.label, systemImage: mode.systemImage).tag(mode)
+            }
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .frame(width: 210)
+        .help("Switch between the sunburst wheel and the treemap")
+        .accessibilityLabel("Chart style")
+    }
+
+    private func ascend() {
+        if !model.path.isEmpty {
+            model.path.removeLast()
+            model.selected = nil
+        }
+    }
+
+    private var chartPanel: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(.ultraThinMaterial)
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .strokeBorder(Theme.border, lineWidth: 1)
             if let cur = model.current, !cur.children.isEmpty {
-                SunburstView(
-                    focus: cur,
-                    canAscend: !model.path.isEmpty,
-                    hovering: $model.hovering,
-                    selected: $model.selected,
-                    onSelect: { _ in /* binding already synced */ },
-                    onDrill: { node in model.drill(into: node) },
-                    onAscend: {
-                        if !model.path.isEmpty {
-                            model.path.removeLast()
-                            model.selected = nil
-                        }
+                Group {
+                    switch chart {
+                    case .sunburst:
+                        SunburstView(
+                            focus: cur,
+                            canAscend: !model.path.isEmpty,
+                            hovering: $model.hovering,
+                            selected: $model.selected,
+                            onSelect: { _ in /* binding already synced */ },
+                            onDrill: { node in model.drill(into: node) },
+                            onAscend: { ascend() }
+                        )
+                    case .treemap:
+                        TreemapView(
+                            focus: cur,
+                            canAscend: !model.path.isEmpty,
+                            hovering: $model.hovering,
+                            selected: $model.selected,
+                            onSelect: { _ in /* binding already synced */ },
+                            onDrill: { node in model.drill(into: node) },
+                            onAscend: { ascend() }
+                        )
                     }
-                )
-                .id(cur.id)
+                }
+                .id("\(chart.rawValue)-\(cur.id)")
                 .transition(.opacity.combined(with: .scale(scale: 0.97)))
                 .padding(20)
             } else {
@@ -470,23 +524,10 @@ struct SpaceLensView: View {
         }
     }
 
-    /// Mirrors the hue calculation in `SunburstLayout.build` for top-level
-    /// children (depth 0) so list dots match the sunburst colors exactly.
+    /// List dots, sunburst slices and treemap tiles all take their colour from
+    /// the one definition in `SunburstLayout`.
     private func hueForChildIndex(_ idx: Int, of parent: SpaceLensNode) -> Double {
-        let totalSpan = 2 * Double.pi
-        let total = Double(parent.size)
-        guard total > 0 else { return 0 }
-        var current: Double = 0
-        for (i, c) in parent.children.enumerated() {
-            let span = totalSpan * Double(c.size) / total
-            let end = current + span
-            if i == idx {
-                let mid = (current + end) / 2.0
-                return mid / totalSpan
-            }
-            current = end
-        }
-        return 0
+        SunburstLayout.topLevelHue(forChildAt: idx, of: parent)
     }
 
     private var breadcrumb: some View {
@@ -589,6 +630,9 @@ private struct ChildListRow: View {
                     }
                     .buttonStyle(.plain)
                     .opacity(isHovering ? 1.0 : 0.4)
+                    // Only visible on hover, so a pointer-free user would never
+                    // find it; the row's custom action below covers that too.
+                    .accessibilityLabel("Open \(child.name)")
                 }
             }
             .padding(.horizontal, 8)
@@ -608,6 +652,19 @@ private struct ChildListRow: View {
         .buttonStyle(.plain)
         .onHover { onHoverChange($0) }
         .simultaneousGesture(TapGesture(count: 2).onEnded { onDrill() })
+        // Read as one row, and expose drilling — which is otherwise a
+        // double-click or a hover-only chevron — as a named action.
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(spokenLabel)
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+        .accessibilityAction(named: "Open") { onDrill() }
+    }
+
+    private var spokenLabel: String {
+        let kind = child.isDirectory
+            ? "folder, \(child.children.count) item\(child.children.count == 1 ? "" : "s")"
+            : "file"
+        return "\(child.name), \(kind), \(byteString(child.size))"
     }
 }
 

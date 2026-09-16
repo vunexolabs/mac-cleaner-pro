@@ -97,8 +97,8 @@ then hit **Clean** — and use **Undo** if you change your mind.
 |---|---|
 | 🧹 **Smart Scan** | A parallel Swift `TaskGroup` sweep driven by **21 signed rules** — user caches, logs, Xcode DerivedData & device support, npm / yarn / Gradle / Maven / CocoaPods caches, Safari, Chrome & Firefox caches, Mail downloads. |
 | 📦 **Large & Old Files** | Pick any folder, filter by size and age, preview with **Quick Look** before you decide, then move to Trash. |
-| 🌌 **Space Lens** | Treemap **and** sunburst visualisers over a recursive, cancellable disk scan — find the 40 GB folder you forgot about. |
-| 🧠 **Memory Manager** | Live RAM pressure gauge, top-consumer list, **Quick Free** (purge + pressure allocation) and Quit Selected. |
+| 🌌 **Space Lens** | Treemap **and** sunburst views over a recursive, cancellable disk scan — click to drill in and find the 40 GB folder you forgot about. Both share one colour scheme, so a folder looks the same whichever you're in. |
+| 🧠 **Memory Manager** | Live RAM pressure gauge, top-consumer list, and a **Quick Free** that applies memory pressure so the kernel drops cached pages — skipped outright, with a reason, when your Mac is already swapping. Quitting apps asks them politely first, so unsaved work gets its save prompt. |
 | 🗑️ **App Uninstaller** | Drag-to-Trash leaves scraps behind. This finds them across **12 user-space** and **6 system-space** Library locations — containers, prefs, launch agents, HTTP storages, WebKit data and more. |
 | 👯 **Duplicate Finder** | Two-pass scan: bucket by size, then confirm with **SHA-256** — no false positives, and the newest copy is pre-selected as the keeper. |
 | 🛠️ **Developer Junk** | One pruned pass for `node_modules`, `.next`, `target`, `.gradle`, `Pods`, `__pycache__`, `venv`, `.tox` and friends — each confirmed by its sibling manifest (`package.json`, `Cargo.toml`, `Podfile`…) so nothing is guessed at. |

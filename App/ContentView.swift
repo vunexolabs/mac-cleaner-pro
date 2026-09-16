@@ -242,6 +242,7 @@ struct BackgroundOrbs: View {
             // switch. These orbs are purely decorative (no material/vibrancy),
             // so flattening them is safe.
             .drawingGroup()
+            .accessibilityHidden(true)
         }
         .allowsHitTesting(false)
     }

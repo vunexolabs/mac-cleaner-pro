@@ -35,5 +35,10 @@ struct ThemeToggle: View {
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
         .help("Toggle theme")
+        // Icon-only control: without an explicit label VoiceOver falls back to
+        // the SF Symbol name ("sun.max.fill").
+        .accessibilityLabel("Appearance")
+        .accessibilityValue(theme.appearance.label)
+        .accessibilityHint("Switches between light, dark and system appearance")
     }
 }

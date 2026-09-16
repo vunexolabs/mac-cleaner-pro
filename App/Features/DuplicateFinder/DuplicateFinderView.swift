@@ -179,6 +179,7 @@ struct DuplicateFinderView: View {
                 Spacer()
                 if model.isScanning {
                     Button("Cancel") { model.cancel() }
+                        .keyboardShortcut(.cancelAction)
                         .buttonStyle(SoftButtonStyle())
                 } else {
                     Button {
@@ -187,6 +188,7 @@ struct DuplicateFinderView: View {
                         Label("Scan", systemImage: "magnifyingglass")
                     }
                     .buttonStyle(GradientButtonStyle())
+                    .keyboardShortcut("r", modifiers: .command)
                 }
             }
         }
@@ -307,6 +309,7 @@ struct DuplicateFinderView: View {
                 disabled: model.selected.isEmpty || !gate.canCleanNow
             ))
             .disabled(model.selected.isEmpty)
+            .keyboardShortcut(.delete, modifiers: .command)
         }
         .padding(14)
         .glassCard(padded: false)
@@ -323,6 +326,7 @@ struct DuplicateFinderView: View {
                 .font(.system(size: 13, weight: .medium))
             Spacer()
             Button("Undo") { model.undoLast() }.buttonStyle(SoftButtonStyle())
+                .keyboardShortcut("z", modifiers: .command)
             Button("Dismiss") { model.dismissUndo() }.buttonStyle(SoftButtonStyle())
         }
         .padding(14)
