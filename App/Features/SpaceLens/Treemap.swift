@@ -9,6 +9,12 @@ struct TreemapTile {
 }
 
 /// Squarified treemap layout (Bruls / Huijsen / van Wijk, 2000).
+///
+/// > Note: nothing renders this yet. Space Lens ships the sunburst only; this
+/// > layout is complete and unit-testable but has no view attached, so the UI
+/// > and docs deliberately say "sunburst" rather than promising a treemap that
+/// > isn't drawn. Wiring it up as a second view mode is a self-contained piece
+/// > of work: feed it `node.children` and a `CGRect`, draw the returned tiles.
 /// Produces tiles whose aspect ratios are kept close to 1.0, which is much
 /// more legible than slice-and-dice. We accept a sorted-by-size-desc array
 /// of children and pack them into `bounds`.

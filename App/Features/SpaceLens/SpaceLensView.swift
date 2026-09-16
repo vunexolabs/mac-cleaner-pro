@@ -150,7 +150,7 @@ struct SpaceLensView: View {
             } else if model.isScanning && model.tree == nil {
                 scanningState
             } else {
-                treemapSection
+                chartSection
             }
             if model.lastUndoToken != nil { undoBanner }
             else if let msg = model.actionMessage {
@@ -166,7 +166,7 @@ struct SpaceLensView: View {
 
     private var header: some View {
         SectionHeader(
-            eyebrow: "Treemap of every byte",
+            eyebrow: "Every byte, mapped",
             title: "Space Lens",
             subtitle: "See where your disk is going. Drill in, reclaim out."
         )
@@ -223,7 +223,7 @@ struct SpaceLensView: View {
                     Text("Visualize every byte on your disk")
                         .font(.system(size: 22, weight: .semibold))
                         .tracking(-0.3)
-                    Text("A live treemap of any folder — click to drill in, right-click to clean.")
+                    Text("A live sunburst of any folder — click to drill in, right-click to clean.")
                         .font(.system(size: 13))
                         .foregroundStyle(.secondary)
                 }
@@ -272,9 +272,9 @@ struct SpaceLensView: View {
         .glassCard(padded: false)
     }
 
-    // MARK: Treemap section
+    // MARK: Chart section
 
-    private var treemapSection: some View {
+    private var chartSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             breadcrumb
             HStack(alignment: .top, spacing: 14) {

@@ -40,7 +40,6 @@ final class SmartScanModel: ObservableObject {
         liveRuleTotal = pack.rules.count
         liveStreamPaths = []
         if lastUndoToken == nil { actionMessage = nil }
-        let start = Date()
         scanTask = Task { [engine] in
             let scanned = await engine.scan(pack: pack) { [weak self] event in
                 // Hop to MainActor — emitter is called from the engine actor.
@@ -80,16 +79,12 @@ final class SmartScanModel: ObservableObject {
                 self.lastScannedAt = Date()
                 self.isScanning = false
             }
-            // Show the completion burst for at least 0.7s after the real
-            // scan finishes — feels more deliberate than snapping straight
-            // to the results list.
-            let elapsed = Date().timeIntervalSince(start)
-            let minDisplay: Double = 1.6
-            let remaining = max(0, minDisplay - elapsed)
-            if remaining > 0 {
-                try? await Task.sleep(for: .seconds(remaining))
-            }
-            try? await Task.sleep(for: .milliseconds(700))
+            // Let the final numbers land before the card gives way to the
+            // results — a cross-fade, not a wait. The previous version padded
+            // every scan to a 1.6s floor plus another 0.7s, so a scan that
+            // finished in 200ms still sat there for over two seconds looking
+            // busy. ScanEngine's own docs promise "no fake canned animation".
+            try? await Task.sleep(for: .milliseconds(300))
             await MainActor.run {
                 withAnimation(.easeOut(duration: 0.25)) { self.scanDisplayActive = false }
             }
