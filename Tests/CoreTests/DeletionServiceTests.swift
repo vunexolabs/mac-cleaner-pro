@@ -104,4 +104,77 @@ final class DeletionServiceTests: XCTestCase {
 
         try await svc.empty(token)
     }
+
+    // MARK: - Persistence across launches
+
+    /// The headline promise: a clean staged in one session is still restorable
+    /// in the next. A fresh `DeletionService` stands in for the relaunched app —
+    /// it starts with an empty in-memory token table and must recover the token
+    /// from disk.
+    func testUndoSurvivesRelaunch() async throws {
+        let a = try touch("survives.bin", bytes: 2048)
+        let originalPath = a.path
+
+        let firstLaunch = DeletionService()
+        let token = try await firstLaunch.trash(urls: [a])
+        XCTAssertFalse(fm.fileExists(atPath: originalPath))
+
+        let secondLaunch = DeletionService()
+        await secondLaunch.loadPersistedTokens()
+
+        let recovered = await secondLaunch.allTokens()
+        XCTAssertTrue(recovered.contains { $0.id == token.id },
+                      "token written by the previous launch should be re-hydrated")
+        let restorable = await secondLaunch.isRestorable(token.id)
+        XCTAssertTrue(restorable)
+
+        try await secondLaunch.undo(id: token.id)
+        XCTAssertTrue(fm.fileExists(atPath: originalPath),
+                      "undo by id should restore files staged before the 'relaunch'")
+    }
+
+    /// If the user empties the Trash in Finder, the on-disk record is dead —
+    /// we drop it rather than offering an undo that would fail.
+    func testLoadDropsTokensWhoseStagingVanished() async throws {
+        let a = try touch("vanishing.bin")
+        let firstLaunch = DeletionService()
+        let token = try await firstLaunch.trash(urls: [a])
+
+        // Simulate "user emptied the Trash".
+        try fm.removeItem(at: token.stagingDir)
+
+        let secondLaunch = DeletionService()
+        await secondLaunch.loadPersistedTokens()
+
+        let restorable = await secondLaunch.isRestorable(token.id)
+        XCTAssertFalse(restorable)
+        let recovered = await secondLaunch.allTokens()
+        XCTAssertFalse(recovered.contains { $0.id == token.id })
+    }
+
+    // MARK: - Retention sweep
+
+    func testSweepRemovesExpiredStagingAndKeepsFresh() async throws {
+        let old = try touch("expired.bin")
+        let svc = DeletionService()
+        let token = try await svc.trash(urls: [old])
+        XCTAssertTrue(fm.fileExists(atPath: token.stagingDir.path))
+
+        // Nothing is due yet under the real 30-day window.
+        let sweptEarly = await svc.sweepExpiredTokens()
+        XCTAssertEqual(sweptEarly, 0)
+        XCTAssertTrue(fm.fileExists(atPath: token.stagingDir.path))
+
+        // A zero-day window makes everything immediately due.
+        let swept = await svc.sweepExpiredTokens(olderThanDays: 0)
+        XCTAssertEqual(swept, 1)
+        XCTAssertFalse(fm.fileExists(atPath: token.stagingDir.path))
+        let remaining = await svc.allTokens()
+        XCTAssertTrue(remaining.isEmpty)
+    }
+
+    func testRetentionWindowIsThirtyDays() {
+        XCTAssertEqual(DeletionService.retentionDays, 30,
+                       "onboarding and Smart Scan both promise a 30-day undo window")
+    }
 }

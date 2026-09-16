@@ -55,7 +55,7 @@ struct OnboardingView: View {
                     .font(.system(size: 18, weight: .medium))
                     .foregroundStyle(Theme.brandGradient)
             }
-            Text("Apple's storage panel hides System Data behind a single opaque number. We break it down rule-by-rule. Every clean is reversible — files stage to a Trash you can restore from for 30 days.")
+            Text("Apple's storage panel hides System Data behind a single opaque number. We break it down rule-by-rule. Every clean is reversible — files stage in your Trash and stay restorable for 30 days, unless you empty the Trash yourself.")
                 .multilineTextAlignment(.center)
                 .font(.callout)
                 .foregroundStyle(.secondary)
@@ -63,7 +63,7 @@ struct OnboardingView: View {
             HStack(spacing: 24) {
                 FeaturePill(icon: "lock.shield.fill", text: "Local-only")
                 FeaturePill(icon: "arrow.uturn.backward.circle.fill", text: "30-day undo")
-                FeaturePill(icon: "checkmark.seal.fill", text: "Pay once")
+                FeaturePill(icon: "checkmark.seal.fill", text: "Free & open source")
             }
             .padding(.top, 6)
             Spacer()
