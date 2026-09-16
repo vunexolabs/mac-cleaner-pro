@@ -1,4 +1,4 @@
-# Ship Readiness — v1.0.3 ($0-mode)
+# Ship Readiness — v1.0.4 ($0-mode)
 
 This document maps every feature to its current state and calls out which capabilities require an Apple Developer Program membership ($99/yr) to unlock.
 
