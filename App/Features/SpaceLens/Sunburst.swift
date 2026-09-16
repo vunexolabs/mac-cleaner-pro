@@ -20,6 +20,22 @@ struct SunburstLayout {
     let segments: [SunburstSegment]
     let maxDepth: Int
 
+    /// Hue for a top-level child — the angular midpoint of its share, which is
+    /// what `build` assigns at depth 0. Shared so the sidebar dots and the
+    /// treemap tiles colour a folder identically to its slice here.
+    static func topLevelHue(forChildAt idx: Int, of parent: SpaceLensNode) -> Double {
+        let totalSpan = 2 * Double.pi
+        let total = Double(parent.size)
+        guard total > 0 else { return 0 }
+        var current: Double = 0
+        for (i, child) in parent.children.enumerated() {
+            let span = totalSpan * Double(child.size) / total
+            if i == idx { return (current + span / 2) / totalSpan }
+            current += span
+        }
+        return 0
+    }
+
     static func build(focus: SpaceLensNode, maxDepth: Int = 4) -> SunburstLayout {
         var segs: [SunburstSegment] = []
         addChildren(of: focus,

@@ -1,25 +1,25 @@
 import Foundation
 import CoreGraphics
-import Core
 
 /// One placed rectangle in a treemap layout.
-struct TreemapTile {
-    let node: SpaceLensNode
-    let frame: CGRect
+public struct TreemapTile: Sendable {
+    public let node: SpaceLensNode
+    public let frame: CGRect
+
+    public init(node: SpaceLensNode, frame: CGRect) {
+        self.node = node
+        self.frame = frame
+    }
 }
 
 /// Squarified treemap layout (Bruls / Huijsen / van Wijk, 2000).
 ///
-/// > Note: nothing renders this yet. Space Lens ships the sunburst only; this
-/// > layout is complete and unit-testable but has no view attached, so the UI
-/// > and docs deliberately say "sunburst" rather than promising a treemap that
-/// > isn't drawn. Wiring it up as a second view mode is a self-contained piece
-/// > of work: feed it `node.children` and a `CGRect`, draw the returned tiles.
+/// Rendered by ``TreemapView``, one of the two chart modes in Space Lens.
 /// Produces tiles whose aspect ratios are kept close to 1.0, which is much
 /// more legible than slice-and-dice. We accept a sorted-by-size-desc array
 /// of children and pack them into `bounds`.
-enum Treemap {
-    static func layout(nodes: [SpaceLensNode], in bounds: CGRect) -> [TreemapTile] {
+public enum Treemap {
+    public static func layout(nodes: [SpaceLensNode], in bounds: CGRect) -> [TreemapTile] {
         guard !nodes.isEmpty, bounds.width > 0, bounds.height > 0 else { return [] }
         let total = nodes.reduce(UInt64(0)) { $0 &+ $1.size }
         guard total > 0 else { return [] }
