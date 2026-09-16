@@ -64,7 +64,9 @@ final class MemoryManagerModel: ObservableObject {
     func runQuickFree(auto: Bool = false) async {
         guard !isFreeing else { return }
         isFreeing = true
-        actionMessage = auto ? "Auto: pressure critical — running Quick Free" : "Freeing RAM with aggressive cleanup…"
+        actionMessage = auto
+            ? "Auto: pressure critical — running Quick Free"
+            : "Applying memory pressure so the kernel drops cached pages…"
         let result = await MemoryFreer.shared.quickFree()
         await onFreeFinished(result, label: auto ? "Auto Quick Free" : "Quick Free")
     }
@@ -139,12 +141,23 @@ final class MemoryManagerModel: ObservableObject {
     }
 
     private func format(result: FreeResult, label: String) -> String {
+        // A deliberate skip is the most useful thing we can say — report it
+        // instead of a cheerful total the user didn't get.
+        if let skipped = result.skippedReason {
+            if result.processesTerminated > 0 {
+                let n = result.processesTerminated
+                return "\(label): \(n) app\(n == 1 ? "" : "s") asked to quit. \(skipped)"
+            }
+            return "\(label): \(skipped)"
+        }
+
         let f = ByteCountFormatter()
         f.countStyle = .memory
         f.allowedUnits = [.useGB, .useMB]
         var parts: [String] = []
         if result.processesTerminated > 0 {
-            parts.append("\(result.processesTerminated) app\(result.processesTerminated == 1 ? "" : "s") quit")
+            let n = result.processesTerminated
+            parts.append("\(n) app\(n == 1 ? "" : "s") asked to quit")
         }
         if result.reclaimedBytes > 0 {
             parts.append("\(f.string(fromByteCount: Int64(result.reclaimedBytes))) freed")
@@ -158,8 +171,10 @@ final class MemoryManagerModel: ObservableObject {
             parts.append("−\(f.string(fromByteCount: Int64(bytes))) swap")
         }
         if parts.isEmpty {
-            // Even if no delta, we still ran aggressive cleanup
-            return "\(label): RAM optimized · purgeable memory cleared"
+            // No delta means the kernel had nothing worth evicting. Saying so is
+            // better than inventing an accomplishment — the previous copy
+            // claimed "purgeable memory cleared" by a routine that never ran.
+            return "\(label): nothing worth reclaiming — your memory is already in good shape"
         }
         return "\(label): " + parts.joined(separator: " · ")
     }

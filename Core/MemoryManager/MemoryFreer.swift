@@ -5,42 +5,41 @@ import Darwin.Mach
 import AppKit   // NSRunningApplication — graceful quit, not a bare SIGTERM
 #endif
 
-/// Orchestrates RAM-reclamation actions with aggressive strategies for real memory freeing.
+/// RAM reclamation, and an honest account of what that can mean without root.
 ///
-/// **Three progressive strategies:**
+/// **There is exactly one mechanism here: pressure allocation.** We allocate a
+/// large block, touch every page so the kernel must actually back it, hold it
+/// briefly, then release. That forces the kernel to evict its least-valuable
+/// pages first — file-backed caches and inactive pages — which is what makes
+/// "available memory" climb afterwards.
 ///
-/// 1. **Purgeable purge** — Use `vm_purgeable_control` to force the kernel to
-///    drop all purgeable memory (file caches, image caches, etc). This is
-///    zero-risk and always effective.
+/// **What that costs.** Those evicted pages were mostly useful file cache. The
+/// number goes up; the next read of an evicted file goes to disk. This is worth
+/// doing when something is about to need a large contiguous chunk of RAM, and
+/// it is not worth doing habitually. `FreeResult.reclaimedBytes` measures the
+/// drop in (cached + inactive) — i.e. what we evicted — and deliberately not
+/// the change in `availableBytes`, which would flatter the result.
 ///
-/// 2. **Pressure allocation** — Allocate large memory blocks to force kernel
-///    memory pressure. Unlike the old "soft purge" this uses:
-///    - Larger allocations (up to 4 GB)
-///    - Page-touching to force real pressure
-///    - Multiple allocation rounds
-///    - Works even under high swap (emergency mode)
+/// **Under swap pressure we do nothing.** Once swap exceeds
+/// ``emergencySwapThreshold`` of RAM, allocating more pages makes the thrashing
+/// worse, so `quickFree` skips the allocation and reports why in
+/// `FreeResult.skippedReason`. The useful action on a swapping Mac is quitting
+/// something, not asking the kernel to shuffle pages.
 ///
-/// 3. **Process memory purge** — Send memory warnings to apps via task_for_pid
-///    and mach_vm_purge to force them to drop caches.
-///
-/// **Emergency mode:** When swap > 25% of RAM, we switch to aggressive mode:
-/// - Skip soft allocations that would increase swap
-/// - Focus on purgeable purge + process cache drops
-/// - Force kernel to compact compressed memory
-/// - Target inactive pages more aggressively
-///
-/// The real `/usr/sbin/purge` binary requires root and is intentionally
-/// deferred to the paid-signing release, when the privileged helper gains a
-/// `runPurge` XPC method.
+/// **What is deliberately absent.** Earlier revisions advertised a purgeable
+/// purge via `vm_purgeable_control` and per-app cache drops via `task_for_pid` /
+/// `mach_vm_purge`. Neither was implemented — one read VM statistics and
+/// yielded, the other called `malloc_zone_pressure_relief` on *our own* heap —
+/// so both were removed rather than left to imply capability we lack. Real
+/// purging is `/usr/sbin/purge`, which needs root; it is deferred to the
+/// paid-signing release, when the privileged helper gains a `runPurge` XPC
+/// method.
 public actor MemoryFreer {
 
     public static let shared = MemoryFreer()
 
     /// Hard ceiling on pressure allocation in normal mode
     public static let maxNormalPurgeBytes: UInt64 = 4 * 1024 * 1024 * 1024  // 4 GB
-
-    /// Emergency mode: smaller, targeted allocations
-    public static let maxEmergencyPurgeBytes: UInt64 = 512 * 1024 * 1024  // 512 MB
 
     /// Swap threshold for emergency mode
     public static let emergencySwapThreshold: Double = 0.25  // 25% of RAM
@@ -49,43 +48,35 @@ public actor MemoryFreer {
 
     // MARK: - Public actions
 
-    /// Runs aggressive memory reclamation with all available strategies.
-    /// Works even under high swap pressure by using emergency mode.
+    /// Evict cached and inactive pages by applying memory pressure — unless the
+    /// machine is already swapping, in which case doing so would make things
+    /// worse and we say so instead.
     public func quickFree() async -> FreeResult {
         let start = Date()
         let before = MemoryStatsReader.snapshot()
 
-        let isEmergency = isEmergencyMode(stats: before)
-        var strategyLabel = isEmergency ? "emergency" : "standard"
-
-        // Phase 1: Always purge all purgeable memory (zero risk, high reward)
-        await purgePurgeableMemory()
-        try? await Task.sleep(nanoseconds: 300_000_000)
-
-        // Phase 2: Force app cache drops
-        await purgeApplicationCaches()
-        try? await Task.sleep(nanoseconds: 300_000_000)
-
-        // Phase 3: Pressure allocation (different strategy for emergency)
-        if isEmergency {
-            // Emergency: multiple small rounds to avoid swap thrashing
-            await runEmergencyPressure()
-            strategyLabel += " (purgeable + caches + light pressure)"
-        } else {
-            // Normal: aggressive single allocation
-            let target = normalPurgeTarget(stats: before)
-            await runPressureAllocation(targetBytes: target)
-            strategyLabel += " (purgeable + caches + pressure)"
+        guard !isEmergencyMode(stats: before) else {
+            return FreeResult(
+                strategy: "no action (swapping)",
+                beforeStats: before,
+                afterStats: MemoryStatsReader.snapshot(),
+                processesTerminated: 0,
+                elapsed: Date().timeIntervalSince(start),
+                skippedReason: "Your Mac is already using swap. Allocating memory to "
+                    + "force the kernel to drop caches would add to the paging it is "
+                    + "already doing. Quit something you aren't using instead."
+            )
         }
 
-        // Let the kernel finish compaction
+        await runPressureAllocation(targetBytes: normalPurgeTarget(stats: before))
+
+        // Let the kernel finish reclaiming before we measure.
         try? await Task.sleep(nanoseconds: 800_000_000)
-        let after = MemoryStatsReader.snapshot()
 
         return FreeResult(
-            strategy: strategyLabel,
+            strategy: "cache eviction under pressure",
             beforeStats: before,
-            afterStats: after,
+            afterStats: MemoryStatsReader.snapshot(),
             processesTerminated: 0,
             elapsed: Date().timeIntervalSince(start)
         )
@@ -124,57 +115,59 @@ public actor MemoryFreer {
         return kill(pid, force ? SIGKILL : SIGTERM) == 0
     }
 
-    /// Quit selected processes, then run full memory reclamation to reclaim
-    /// what those processes left behind. Always runs cleanup regardless of swap.
+    /// Ask the given processes to quit, then reclaim what they released.
+    ///
+    /// Quitting is the part that genuinely returns memory; the pressure pass
+    /// afterwards only evicts caches, and is skipped on a swapping machine for
+    /// the same reason `quickFree` skips it.
     public func quitAndFree(pids: [pid_t], force: Bool = false) async -> FreeResult {
         let start = Date()
         let before = MemoryStatsReader.snapshot()
-        let killed = terminate(pids: pids, force: force)
+        let asked = terminate(pids: pids, force: force)
 
-        // Give terminated processes time to release their memory
+        // Give the apps a moment to wind down and release their pages.
         try? await Task.sleep(nanoseconds: 1_000_000_000)
 
-        // Always run cleanup after quitting apps
-        await purgePurgeableMemory()
-        try? await Task.sleep(nanoseconds: 300_000_000)
-
         let basis = MemoryStatsReader.snapshot()
-        let isEmergency = isEmergencyMode(stats: basis)
+        let label = force ? "force-quit" : "quit"
 
-        if isEmergency {
-            await runEmergencyPressure()
-        } else {
-            let target = normalPurgeTarget(stats: basis)
-            await runPressureAllocation(targetBytes: target)
+        guard !isEmergencyMode(stats: basis) else {
+            return FreeResult(
+                strategy: "\(label) only (swapping)",
+                beforeStats: before,
+                afterStats: basis,
+                processesTerminated: asked,
+                elapsed: Date().timeIntervalSince(start),
+                skippedReason: "Skipped the cache-eviction pass: your Mac is still "
+                    + "swapping, and allocating memory now would add to the paging."
+            )
         }
 
+        await runPressureAllocation(targetBytes: normalPurgeTarget(stats: basis))
         try? await Task.sleep(nanoseconds: 500_000_000)
-        let after = MemoryStatsReader.snapshot()
-
-        let label = force ? "force-quit" : "quit"
-        let mode = isEmergency ? "emergency" : "standard"
-        let strategy = "\(label) + \(mode) cleanup"
 
         return FreeResult(
-            strategy: strategy,
+            strategy: "\(label) + cache eviction",
             beforeStats: before,
-            afterStats: after,
-            processesTerminated: killed,
+            afterStats: MemoryStatsReader.snapshot(),
+            processesTerminated: asked,
             elapsed: Date().timeIntervalSince(start)
         )
     }
 
     // MARK: - Strategy helpers (internal but exposed for tests)
 
-    /// Determines if we should use emergency mode (high swap pressure)
+    /// True when the machine is already paging hard enough that adding memory
+    /// pressure of our own would make it worse.
     internal func isEmergencyMode(stats: MemoryStats) -> Bool {
         guard stats.totalBytes > 0 else { return false }
         let swapFrac = Double(stats.swapUsedBytes) / Double(stats.totalBytes)
         return swapFrac >= Self.emergencySwapThreshold
     }
 
-    /// Calculates allocation target for normal (non-emergency) mode
-    /// Targets up to 4 GB or half of reclaimable memory, whichever is smaller
+    /// How much to allocate: half of what looks reclaimable, capped at 4 GB.
+    /// Half, not all, so we prod the kernel into evicting caches rather than
+    /// racing it for the last free page.
     internal func normalPurgeTarget(stats: MemoryStats) -> UInt64 {
         let reclaimable = stats.freeBytes &+ stats.purgeableBytes &+ stats.inactiveBytes &+ stats.speculativeBytes
         let target = min(reclaimable / 2, Self.maxNormalPurgeBytes)
@@ -182,50 +175,13 @@ public actor MemoryFreer {
         return max(target, 256 * 1024 * 1024)
     }
 
-    // MARK: - Phase 1: Purgeable memory purge
+    // MARK: - Pressure allocation
 
-    /// Force kernel to drop all purgeable memory (file caches, image caches, etc)
-    /// This uses undocumented but stable mach APIs that CleanMyMac and similar tools use
-    private func purgePurgeableMemory() async {
-        // Get host port for VM operations
-        let host = mach_host_self()
-
-        // Force synchronous purge of purgeable memory
-        // This is what /usr/sbin/purge does internally (without needing root for this part)
-        var vmInfo = vm_statistics64_data_t()
-        var count = mach_msg_type_number_t(MemoryLayout<vm_statistics64_data_t>.size / MemoryLayout<integer_t>.size)
-
-        withUnsafeMutablePointer(to: &vmInfo) { ptr in
-            ptr.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
-                _ = host_statistics64(host, HOST_VM_INFO64, $0, &count)
-            }
-        }
-
-        // The act of reading + yielding creates pressure for purgeable cleanup
-        // More importantly: iterate through our own pages and mark as purgeable
-        await Task.yield()
-    }
-
-    // MARK: - Phase 2: Application cache purging
-
-    /// Send memory pressure notifications to running apps to force cache drops
-    /// This mimics what the kernel does under real memory pressure
-    private func purgeApplicationCaches() async {
-        // Send SIGUSR1 to apps that listen for memory warnings
-        // Most well-behaved apps handle this and drop caches
-
-        // Also: force our own process to compact
-        malloc_zone_pressure_relief(nil, 0)
-
-        // Yield to let other apps respond
-        try? await Task.sleep(nanoseconds: 100_000_000)
-    }
-
-    // MARK: - Phase 3: Pressure allocation
-
-    /// Standard pressure allocation for normal conditions
+    /// Allocate, touch every page so the kernel must really back it, hold
+    /// briefly, release. The touching is what makes this work: an untouched
+    /// `malloc` is just address space and applies no pressure at all.
     private func runPressureAllocation(targetBytes: UInt64) async {
-        let chunkSize = 128 * 1024 * 1024  // 128 MB chunks (larger than old 64 MB)
+        let chunkSize = 128 * 1024 * 1024
         let totalChunks = Int(min(targetBytes / UInt64(chunkSize), 128))
         guard totalChunks > 0 else { return }
 
@@ -264,44 +220,5 @@ public actor MemoryFreer {
 
         // Force malloc zones to release back to system
         malloc_zone_pressure_relief(nil, 0)
-    }
-
-    /// Emergency pressure for high-swap situations
-    /// Uses smaller, targeted allocations to avoid making swap worse
-    private func runEmergencyPressure() async {
-        let chunkSize = 32 * 1024 * 1024  // 32 MB (small chunks)
-        let totalChunks = Int(Self.maxEmergencyPurgeBytes / UInt64(chunkSize))
-
-        let pageSize = Int(getpagesize())
-
-        // Do multiple quick rounds instead of one sustained allocation
-        for _ in 0..<3 {
-            var pointers: [UnsafeMutableRawPointer] = []
-            pointers.reserveCapacity(totalChunks)
-
-            for i in 0..<totalChunks {
-                guard let p = malloc(chunkSize) else { break }
-
-                // Touch every page
-                var off = 0
-                while off < chunkSize {
-                    p.advanced(by: off).assumingMemoryBound(to: UInt8.self).pointee = UInt8(i & 0xFF)
-                    off += pageSize
-                }
-                pointers.append(p)
-            }
-
-            // Hold briefly
-            try? await Task.sleep(nanoseconds: 100_000_000)
-
-            // Release
-            for p in pointers { free(p) }
-
-            // Force cleanup
-            malloc_zone_pressure_relief(nil, 0)
-
-            // Pause between rounds
-            try? await Task.sleep(nanoseconds: 200_000_000)
-        }
     }
 }
