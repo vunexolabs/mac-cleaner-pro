@@ -97,7 +97,7 @@ then hit **Clean** — and use **Undo** if you change your mind.
 |---|---|
 | 🧹 **Smart Scan** | A parallel Swift `TaskGroup` sweep driven by **21 signed rules** — user caches, logs, Xcode DerivedData & device support, npm / yarn / Gradle / Maven / CocoaPods caches, Safari, Chrome & Firefox caches, Mail downloads. |
 | 📦 **Large & Old Files** | Pick any folder, filter by size and age, preview with **Quick Look** before you decide, then move to Trash. |
-| 🌌 **Space Lens** | Treemap **and** sunburst visualisers over a recursive, pausable disk scan — find the 40 GB folder you forgot about. |
+| 🌌 **Space Lens** | Treemap **and** sunburst visualisers over a recursive, cancellable disk scan — find the 40 GB folder you forgot about. |
 | 🧠 **Memory Manager** | Live RAM pressure gauge, top-consumer list, **Quick Free** (purge + pressure allocation) and Quit Selected. |
 | 🗑️ **App Uninstaller** | Drag-to-Trash leaves scraps behind. This finds them across **12 user-space** and **6 system-space** Library locations — containers, prefs, launch agents, HTTP storages, WebKit data and more. |
 | 👯 **Duplicate Finder** | Two-pass scan: bucket by size, then confirm with **SHA-256** — no false positives, and the newest copy is pre-selected as the keeper. |
@@ -125,9 +125,11 @@ explicit about it:
 1. **Trash-first, always.** Files are *moved* (a rename, not a copy) into
    `~/.Trash/MacCleanerPro/<UUID>/`. Nothing is ever `rm -rf`'d, including in
    the developer-junk scanner.
-2. **Real Undo.** Each cleanup gets a token that is persisted to disk, so you
-   can restore an action even after quitting the app. Files stay recoverable
-   until you empty the Trash yourself.
+2. **Real Undo.** Each cleanup gets a token that is persisted to disk and
+   re-hydrated at launch, so you can restore an action from the Activity Log
+   even after quitting the app. Staged files stay recoverable for 30 days,
+   after which a sweep clears them — or until you empty the Trash yourself,
+   whichever comes first.
 3. **Signed rules.** Rule packs say *which files may be deleted*, so they are
    Ed25519-signed and verified against a public key compiled into the app —
    a tampered pack is rejected outright. See

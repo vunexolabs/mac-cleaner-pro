@@ -5,16 +5,62 @@ import Core
 final class ActivityLogModel: ObservableObject {
     @Published var entries: [ActivityEntry] = []
     @Published var totalReclaimed: UInt64 = 0
+    /// Token IDs whose staged files are still on disk, so the matching log
+    /// entry can offer Undo. Recomputed on every reload — the user can empty
+    /// the Trash in Finder at any point and strand them.
+    @Published var restorable: Set<UUID> = []
+    @Published var undoingTokenID: UUID?
+    @Published var undoError: String?
 
     func reload() {
         Task {
             let all = await ActivityLog.shared.all()
+            var live: Set<UUID> = []
+            for entry in all where entry.kind == .clean {
+                guard let id = entry.tokenID else { continue }
+                if await DeletionService.shared.isRestorable(id) { live.insert(id) }
+            }
             await MainActor.run {
                 self.entries = all
+                self.restorable = live
                 self.totalReclaimed = all
                     .filter { $0.kind == .clean }
                     .reduce(UInt64(0)) { $0 &+ $1.bytes }
             }
+        }
+    }
+
+    /// Restore a previous clean straight from the log — including one staged by
+    /// an earlier launch of the app.
+    func undo(tokenID: UUID) {
+        undoingTokenID = tokenID
+        undoError = nil
+        Task {
+            do {
+                try await DeletionService.shared.undo(id: tokenID)
+                await MainActor.run { self.undoingTokenID = nil }
+                reload()
+            } catch {
+                await MainActor.run {
+                    self.undoingTokenID = nil
+                    self.undoError = Self.message(for: error)
+                }
+                reload()
+            }
+        }
+    }
+
+    private static func message(for error: Error) -> String {
+        guard let err = error as? DeletionError else { return error.localizedDescription }
+        switch err {
+        case .sourceMissing:
+            return "Those files are no longer in the Trash — it looks like it was emptied."
+        case .originalReoccupied(let url):
+            return "Something new already exists at \(url.lastPathComponent) — restore cancelled so it isn't overwritten."
+        case .unknownToken:
+            return "This cleanup can no longer be restored."
+        case .ioFailure(let underlying):
+            return underlying
         }
     }
 
@@ -34,12 +80,20 @@ struct ActivityLogView: View {
             VStack(alignment: .leading, spacing: 18) {
                 header
                 summaryCard
+                if let err = model.undoError {
+                    undoErrorBanner(err)
+                }
                 if model.entries.isEmpty {
                     emptyState
                 } else {
                     LazyVStack(spacing: 8) {
                         ForEach(model.entries) { e in
-                            EntryRow(entry: e)
+                            EntryRow(
+                                entry: e,
+                                canRestore: e.tokenID.map { model.restorable.contains($0) } ?? false,
+                                isRestoring: e.tokenID != nil && e.tokenID == model.undoingTokenID,
+                                onRestore: { if let id = e.tokenID { model.undo(tokenID: id) } }
+                            )
                         }
                     }
                 }
@@ -107,6 +161,22 @@ struct ActivityLogView: View {
         .glassCard(padded: false)
     }
 
+    private func undoErrorBanner(_ message: String) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(Theme.warn)
+            Text(message)
+                .font(.system(size: 12))
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer()
+            Button("Dismiss") { model.undoError = nil }
+                .buttonStyle(SoftButtonStyle())
+        }
+        .padding(14)
+        .glassCard(padded: false)
+        .accessibilityElement(children: .combine)
+    }
+
     private var emptyState: some View {
         VStack(alignment: .leading, spacing: 18) {
             HStack(spacing: 14) {
@@ -149,6 +219,11 @@ struct ActivityLogView: View {
 
 private struct EntryRow: View {
     let entry: ActivityEntry
+    /// True when this clean's staged files are still in the Trash.
+    var canRestore: Bool = false
+    var isRestoring: Bool = false
+    var onRestore: () -> Void = {}
+
     var body: some View {
         HStack(spacing: 14) {
             ZStack {
@@ -162,10 +237,30 @@ private struct EntryRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(headline)
                     .font(.system(size: 13, weight: .medium))
-                Text(entry.timestamp.formatted(date: .abbreviated, time: .standard))
-                    .font(.caption2).foregroundStyle(.secondary)
+                HStack(spacing: 6) {
+                    Text(entry.timestamp.formatted(date: .abbreviated, time: .standard))
+                    if let note = entry.note {
+                        Text("· \(note)")
+                    }
+                }
+                .font(.caption2)
+                .foregroundStyle(.secondary)
             }
             Spacer()
+            if canRestore {
+                Button(action: onRestore) {
+                    if isRestoring {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Label("Undo", systemImage: "arrow.uturn.backward")
+                            .font(.system(size: 12, weight: .medium))
+                    }
+                }
+                .buttonStyle(SoftButtonStyle())
+                .disabled(isRestoring)
+                .help("Move these \(entry.itemCount) item\(entry.itemCount == 1 ? "" : "s") back where they came from")
+                .accessibilityLabel("Undo \(headline)")
+            }
             Text(byteString(entry.bytes))
                 .font(.system(size: 13, weight: .semibold).monospacedDigit())
                 .foregroundStyle(entry.kind == .undo ? .secondary : .primary)

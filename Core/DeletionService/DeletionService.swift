@@ -18,7 +18,8 @@ public struct DeletionFailure: Sendable, Hashable {
 
 /// Receipt for a `trash` operation. Hand it back to `undo` to restore, or to
 /// `empty` to permanently delete. Tokens are also persisted to disk so undo
-/// survives an app relaunch within the retention window.
+/// survives an app relaunch within the retention window — call
+/// ``DeletionService/loadPersistedTokens()`` once at launch to re-hydrate them.
 public struct UndoToken: Codable, Sendable, Identifiable, Hashable {
     public let id: UUID
     public let createdAt: Date
@@ -189,7 +190,7 @@ public actor DeletionService {
     }
 
     /// Drop every staging directory and token. Used by Settings → "Empty staged
-    /// trash now" and by the (future) retention-window sweep.
+    /// trash now".
     public func emptyAll() async throws {
         let root = Self.rootStagingDir()
         if fm.fileExists(atPath: root.path) {
@@ -198,7 +199,13 @@ public actor DeletionService {
         tokens.removeAll()
     }
 
-    /// Re-hydrate tokens from disk. Call once on app launch.
+    /// Re-hydrate tokens from disk. Call once on app launch, before showing any
+    /// undo affordance — without it, a token written by a previous launch is
+    /// invisible to `allTokens()` and its staged files are stranded in the Trash.
+    ///
+    /// Tokens whose staging directory has since vanished (the user emptied the
+    /// Trash in Finder) are dropped here rather than surfaced as undos that
+    /// would fail with `sourceMissing`.
     public func loadPersistedTokens() async {
         let dir = Self.tokensDir()
         guard let names = try? fm.contentsOfDirectory(atPath: dir.path) else { return }
@@ -208,12 +215,75 @@ public actor DeletionService {
             let url = dir.appendingPathComponent(name)
             guard let data = try? Data(contentsOf: url),
                   let token = try? decoder.decode(UndoToken.self, from: data) else { continue }
+            guard fm.fileExists(atPath: token.stagingDir.path) else {
+                // Staged files are gone — the record is dead weight.
+                try? fm.removeItem(at: url)
+                continue
+            }
             tokens[token.id] = token
         }
     }
 
     public func allTokens() async -> [UndoToken] {
         Array(tokens.values).sorted { $0.createdAt > $1.createdAt }
+    }
+
+    /// Look up a known token by id — for undoing straight from an Activity Log
+    /// entry, which stores only the `tokenID`.
+    public func token(id: UUID) async -> UndoToken? {
+        if let token = tokens[id] { return token }
+        try? ingestFromDiskIfPresent(id)
+        return tokens[id]
+    }
+
+    /// Whether `id` can still be restored: we know the token and its staged
+    /// files are still on disk.
+    public func isRestorable(_ id: UUID) async -> Bool {
+        guard let token = await token(id: id) else { return false }
+        return fm.fileExists(atPath: token.stagingDir.path)
+    }
+
+    /// Restore by id. Convenience over ``undo(_:)`` for call sites that only
+    /// hold an `ActivityEntry.tokenID`.
+    public func undo(id: UUID) async throws {
+        guard let token = await token(id: id) else {
+            throw DeletionError.unknownToken(id)
+        }
+        try await undo(token)
+    }
+
+    // MARK: - Retention
+
+    /// How long staged files stay restorable before ``sweepExpiredTokens(olderThanDays:now:)``
+    /// removes them for good. The user can still empty the Trash sooner — this
+    /// is an upper bound on how long we hold their disk space, not a guarantee
+    /// the files survive that long.
+    public static let retentionDays = 30
+
+    /// Permanently delete staging directories older than the retention window
+    /// and forget their tokens. Call at launch, after `loadPersistedTokens()`.
+    ///
+    /// Each removal is recorded in the Activity Log — a sweep destroys user data,
+    /// so it belongs in the audit trail just like a manual "empty".
+    /// Returns the number of tokens swept.
+    @discardableResult
+    public func sweepExpiredTokens(olderThanDays days: Int = DeletionService.retentionDays,
+                                   now: Date = Date()) async -> Int {
+        let cutoff = Double(days) * 86_400
+        var swept = 0
+        // Snapshot first — the loop mutates `tokens`.
+        let due = Array(tokens.values).filter { now.timeIntervalSince($0.createdAt) >= cutoff }
+        for token in due {
+            try? fm.removeItem(at: token.stagingDir)
+            try? fm.removeItem(at: tokenFile(for: token.id))
+            tokens.removeValue(forKey: token.id)
+            swept += 1
+            await ActivityLog.shared.append(ActivityEntry(
+                kind: .empty, source: .system, bytes: token.totalBytes,
+                itemCount: token.entries.count, tokenID: token.id,
+                note: "Retention window elapsed (\(days) days)"))
+        }
+        return swept
     }
 
     // MARK: - Internals

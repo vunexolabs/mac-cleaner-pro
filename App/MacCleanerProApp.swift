@@ -11,6 +11,14 @@ struct MacCleanerProApp: App {
         WindowGroup {
             ContentView()
                 .frame(minWidth: 980, minHeight: 640)
+                .task {
+                    // Re-hydrate undo tokens written by previous launches, then
+                    // drop anything past the retention window. Without the load,
+                    // staged files from an earlier session are stranded in the
+                    // Trash with no way to restore them from the app.
+                    await DeletionService.shared.loadPersistedTokens()
+                    await DeletionService.shared.sweepExpiredTokens()
+                }
                 .environmentObject(theme)
                 .preferredColorScheme(theme.appearance.colorScheme)
                 .sheet(isPresented: $showOnboarding) {
@@ -41,8 +49,11 @@ struct MacCleanerProApp: App {
             }
             CommandGroup(after: .appInfo) {
                 Divider()
-                Button("Sponsor Mac Cleaner Pro…") {
-                    if let url = URL(string: "https://github.com/sponsors/vunexolabs") {
+                // Sponsor accounts aren't set up yet — point supporters at
+                // email rather than a GitHub Sponsors page that 404s. Keep in
+                // step with SettingsView.openSupportEmail().
+                Button("Support Mac Cleaner Pro…") {
+                    if let url = URL(string: "mailto:hello@maccleanerpro.com?subject=Supporting%20Mac%20Cleaner%20Pro") {
                         NSWorkspace.shared.open(url)
                     }
                 }
