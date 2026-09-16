@@ -159,7 +159,7 @@ enum SpaceLensChart: String, CaseIterable, Identifiable {
 
 struct SpaceLensView: View {
     @StateObject private var model = SpaceLensModel()
-    @AppStorage("MCP-SpaceLens-Chart") private var chart: SpaceLensChart = .treemap
+    @AppStorage("MCP-SpaceLens-Chart") private var chart: SpaceLensChart = .sunburst
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
