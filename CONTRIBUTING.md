@@ -73,7 +73,10 @@ early than ask for a rewrite after the fact.
 1. Fork the repo, branch off `main`.
 2. Keep PRs focused — one logical change per PR is much easier to review.
 3. Add/update tests in `Tests/CoreTests/` for any `Core/` change.
-4. Make sure `xcodebuild ... test` passes locally.
+4. Make sure `xcodebuild ... test` passes locally. CI runs the same thing on
+   every PR (`.github/workflows/ci.yml`): it regenerates the project with
+   XcodeGen, builds the app, then runs the `Core` suite — so a `project.yml`
+   that no longer generates fails there too.
 5. Open the PR with a clear description of *why*, not just *what*.
 
 ## What not to touch
