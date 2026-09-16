@@ -4,9 +4,24 @@ import Foundation
 ///
 /// Supported syntax in a single path string:
 ///   - Leading `~/` expands to the current user's home directory.
-///   - A path segment of `*` matches any non-hidden direct child of the parent.
-///   - A path segment of `**` matches zero or more directory levels (recursive).
+///   - A path segment of `*` matches any direct child of the parent, hidden
+///     children included.
+///   - A path segment of `**` matches zero or more directory levels (recursive),
+///     descending into hidden directories too.
 ///   - All other segments are treated as literals.
+///
+/// Hidden entries used to be skipped by both wildcards. That silently excluded
+/// real reclaimable data: every rule that wildcards into a cache tree
+/// (`~/Library/Caches/*`, `.../DerivedData/*`, the browser profiles) missed the
+/// dot-prefixed children sitting right next to the ones it matched, and a
+/// directory the scanner *did* match was deleted whole anyway — hidden contents
+/// and all. Matching them makes what a rule selects agree with what cleaning it
+/// actually removes.
+///
+/// This widens what a wildcard selects, so two things stay true by design: a
+/// rule's `excludes` are applied after expansion and still win, and package
+/// contents are never descended into (`.skipsPackageDescendants` below), so a
+/// `**` never walks inside a `.app`.
 ///
 /// `**` is restricted to "directory recursion" semantics — the next segment after
 /// `**` is what we're actually looking for. e.g. `~/Library/Logs/**/*` finds every
@@ -90,16 +105,16 @@ public struct PathResolver: Sendable {
 
     private func childURLs(of dir: URL) -> [URL] {
         guard let names = try? FileManager.default.contentsOfDirectory(atPath: dir.path) else { return [] }
-        return names
-            .filter { !$0.hasPrefix(".") }
-            .map { dir.appendingPathComponent($0) }
+        // `contentsOfDirectory` never yields "." or "..", so no filtering is
+        // needed to stay inside `dir`.
+        return names.map { dir.appendingPathComponent($0) }
     }
 
     private func directoriesRecursive(under root: URL) -> [URL] {
         guard let enumerator = FileManager.default.enumerator(
             at: root,
             includingPropertiesForKeys: [.isDirectoryKey],
-            options: [.skipsHiddenFiles, .skipsPackageDescendants]
+            options: [.skipsPackageDescendants]
         ) else { return [] }
         var dirs: [URL] = []
         for case let url as URL in enumerator {
