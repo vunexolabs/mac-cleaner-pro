@@ -8,6 +8,7 @@
 
 No telemetry. No cloud uploads. No subscription. Every deletion undoable.
 
+[![CI](https://github.com/vunexolabs/mac-cleaner-pro/actions/workflows/ci.yml/badge.svg)](https://github.com/vunexolabs/mac-cleaner-pro/actions/workflows/ci.yml)
 [![macOS](https://img.shields.io/badge/macOS-13.0%2B-000000?style=flat-square&logo=apple&logoColor=white)](#-requirements)
 [![Swift](https://img.shields.io/badge/Swift-5.10-F05138?style=flat-square&logo=swift&logoColor=white)](#-architecture)
 [![SwiftUI](https://img.shields.io/badge/UI-SwiftUI-0071E3?style=flat-square&logo=swift&logoColor=white)](#-architecture)

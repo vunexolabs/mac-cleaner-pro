@@ -44,8 +44,15 @@ final class DeveloperScannerTests: XCTestCase {
         // Exactly one node_modules (nested one pruned).
         let nm = artifacts.filter { $0.kind == "node_modules" }
         XCTAssertEqual(nm.count, 1)
-        XCTAssertEqual(nm.first?.url.resolvingSymlinksInPath().standardizedFileURL,
-                       nodeModules.resolvingSymlinksInPath().standardizedFileURL)
+        // Compare paths, not URLs. The scanner's URL comes from
+        // FileManager.enumerator, which marks directories as such — so it
+        // carries a trailing slash — while `mkdir` above builds a plain
+        // appendingPathComponent URL that does not. standardizedFileURL
+        // normalizes symlinks and `..` but not directory-ness, so the two
+        // compare unequal despite naming the same directory. `.path` drops it,
+        // and is what every other comparison in these tests already uses.
+        XCTAssertEqual(nm.first?.url.resolvingSymlinksInPath().standardizedFileURL.path,
+                       nodeModules.resolvingSymlinksInPath().standardizedFileURL.path)
         XCTAssertTrue(nm.first?.confirmed == true)
         XCTAssertEqual(nm.first?.safety, .safe)
         XCTAssertEqual(nm.first?.projectName, "myapp")

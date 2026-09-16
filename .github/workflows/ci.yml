@@ -1,0 +1,68 @@
+name: CI
+
+# Builds the app and runs the Core test suite on every push and PR.
+#
+# The project has no checked-in .xcodeproj — it is generated from project.yml
+# by XcodeGen — so CI regenerates it first. That means this also catches a
+# project.yml that no longer generates, which is otherwise only discovered by
+# whoever next opens the project locally.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Build & test
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Swift 5.10 (see project.yml) needs Xcode 15.3 or newer. Printed rather
+      # than pinned: a pinned Xcode path rots every time the runner image is
+      # updated, and when a build does break on a toolchain change this is the
+      # first line you want in the log.
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      # Built separately from the tests so a SwiftUI compile error in App/ is
+      # reported as a build failure rather than buried in a test log. App/ has
+      # no unit tests, so this step is its only coverage.
+      - name: Build app
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project MacCleanerPro.xcodeproj \
+            -scheme MacCleanerPro \
+            -destination 'platform=macOS' \
+            -configuration Debug \
+            build
+
+      # The Core scheme builds the framework and its tests without the app
+      # bundle or the embedded privileged helper, so the suite doesn't depend
+      # on code signing succeeding on a runner.
+      - name: Run Core tests
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project MacCleanerPro.xcodeproj \
+            -scheme Core \
+            -destination 'platform=macOS' \
+            test
