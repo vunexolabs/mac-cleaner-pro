@@ -36,14 +36,54 @@ final class PathResolverTests: XCTestCase {
         XCTAssertEqual(resolved.map(\.path), [f.path])
     }
 
-    func testStarMatchesDirectChildren() throws {
+    /// `*` matches hidden children too. Cleaning a matched directory removes
+    /// its hidden contents regardless, so excluding them from the match only
+    /// ever understated what a rule would reclaim.
+    func testStarMatchesDirectChildrenIncludingHidden() throws {
         _ = try touch("dir/a.txt")
         _ = try touch("dir/b.txt")
         _ = try touch("dir/.hidden")
         let resolver = PathResolver()
         let resolved = resolver.resolve(patterns: ["\(tmp.path)/dir/*"])
         let names = Set(resolved.map { $0.lastPathComponent })
-        XCTAssertEqual(names, ["a.txt", "b.txt"])
+        XCTAssertEqual(names, ["a.txt", "b.txt", ".hidden"])
+    }
+
+    /// The expansion must never escape the directory being globbed.
+    func testStarNeverYieldsDotOrDotDot() throws {
+        _ = try touch("glob/only.txt")
+        let resolver = PathResolver()
+        let names = Set(resolver.resolve(patterns: ["\(tmp.path)/glob/*"])
+            .map { $0.lastPathComponent })
+        XCTAssertFalse(names.contains("."))
+        XCTAssertFalse(names.contains(".."))
+        XCTAssertEqual(names, ["only.txt"])
+    }
+
+    /// `**` descends into hidden directories — `.cache/`-style subtrees are
+    /// exactly what the developer and browser rules are aimed at.
+    func testDoubleStarDescendsIntoHiddenDirectories() throws {
+        _ = try touch("logs/visible/x.log")
+        _ = try touch("logs/.hidden/y.log")
+        let resolver = PathResolver()
+        let names = Set(resolver.resolve(patterns: ["\(tmp.path)/logs/**/*"])
+            .map { $0.lastPathComponent })
+        XCTAssertTrue(names.contains("y.log"),
+                      "a log inside a hidden directory is still a log")
+        XCTAssertTrue(names.contains("x.log"))
+    }
+
+    /// Widening the match must not weaken excludes — they are applied after
+    /// expansion and still win, hidden entries included.
+    func testExcludesStillWinOverHiddenMatches() throws {
+        _ = try touch("guarded/keep.txt")
+        _ = try touch("guarded/.secret")
+        let resolver = PathResolver()
+        let names = Set(resolver.resolve(
+            patterns: ["\(tmp.path)/guarded/*"],
+            excludes: ["\(tmp.path)/guarded/.secret"]
+        ).map { $0.lastPathComponent })
+        XCTAssertEqual(names, ["keep.txt"])
     }
 
     func testDoubleStarRecursive() throws {
