@@ -12,7 +12,7 @@ No telemetry. No cloud uploads. No subscription. Every deletion undoable.
 [![macOS](https://img.shields.io/badge/macOS-13.0%2B-000000?style=flat-square&logo=apple&logoColor=white)](#-requirements)
 [![Swift](https://img.shields.io/badge/Swift-5.10-F05138?style=flat-square&logo=swift&logoColor=white)](#-architecture)
 [![SwiftUI](https://img.shields.io/badge/UI-SwiftUI-0071E3?style=flat-square&logo=swift&logoColor=white)](#-architecture)
-[![Version](https://img.shields.io/badge/version-1.0.3-blue?style=flat-square)](../../releases)
+[![Version](https://img.shields.io/badge/version-1.0.4-blue?style=flat-square)](../../releases)
 [![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
 [![Telemetry](https://img.shields.io/badge/telemetry-none-brightgreen?style=flat-square)](#-privacy-promise)
 
@@ -41,7 +41,8 @@ developer. Every feature is unlocked for everyone: no trial, no paywall, no
 ## 📥 Download
 
 Prebuilt releases: **[maccleanerpro.com](https://maccleanerpro.com)** or this
-repo's [Releases](../../releases) page.
+repo's [Releases](../../releases) page. Release notes for every version live at
+**[maccleanerpro.com/changelog](https://maccleanerpro.com/changelog/)**.
 
 Prefer to compile it yourself? See [Build from source](#-build-from-source).
 
@@ -255,8 +256,9 @@ and new rule packs.
 
 - ⭐ **Star this repo** — it's the cheapest way to help
 - 🐛 **File a good bug report**, or send a PR
-- 💌 **Sponsor:** GitHub Sponsors / Open Collective / Ko-fi accounts are still
-  being set up — until they're live, reach out at **hello@maccleanerpro.com**
+- ☕ **[Buy Me a Coffee](https://buymeacoffee.com/vunexolabs)** or
+  **[Ko-fi](https://ko-fi.com/vunexolabs)** — both live
+- 💌 Prefer something else? Reach out at **hello@maccleanerpro.com**
 
 ---
 

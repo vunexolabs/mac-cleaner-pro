@@ -1,7 +1,7 @@
 # These power the "Sponsor" button on GitHub.
-# TODO(maintainer): verify each handle/slug once the account is created —
-# github.com/sponsors application needs approval, open_collective/ko_fi need
-# the org/handle to be registered under vunexolabs first.
-github: [vunexolabs]
-open_collective: mac-cleaner-pro
+# Only live destinations belong here — a Sponsor button that leads to a 404
+# is worse than no button. GitHub Sponsors and Open Collective were listed
+# before either account existed; re-add them once they are actually set up
+# under the vunexolabs handle.
 ko_fi: vunexolabs
+custom: ["https://buymeacoffee.com/vunexolabs"]

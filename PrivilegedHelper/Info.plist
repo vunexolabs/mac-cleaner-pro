@@ -13,9 +13,9 @@
 	<key>CFBundleName</key>
 	<string>com.maccleanerpro.helper</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0.3</string>
+	<string>1.0.4</string>
 	<key>CFBundleVersion</key>
-	<string>1</string>
+	<string>3</string>
 	<key>SMAuthorizedClients</key>
 	<array>
 		<string>anchor apple generic and identifier com.maccleanerpro and certificate leaf[subject.OU] = "REPLACE_TEAM_ID"</string>
