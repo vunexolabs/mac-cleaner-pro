@@ -153,6 +153,9 @@ struct UninstallerView: View {
                         .font(.system(size: 12, weight: .semibold))
                 }
                 .buttonStyle(SoftButtonStyle())
+                .keyboardShortcut("r", modifiers: .command)
+                .help("Rescan installed apps")
+                .accessibilityLabel("Rescan installed apps")
             }
             .padding(.horizontal, 14).padding(.vertical, 12)
             Divider().opacity(0.3)
@@ -368,6 +371,7 @@ struct UninstallerView: View {
                 disabled: model.totalSelectedBytes == 0 || !gate.canCleanNow
             ))
             .disabled(model.totalSelectedBytes == 0 || !gate.canCleanNow)
+            .keyboardShortcut(.delete, modifiers: .command)
         }
         .padding(14)
         .glassCard(padded: false)
@@ -382,6 +386,7 @@ struct UninstallerView: View {
                 .font(.system(size: 13, weight: .medium))
             Spacer()
             Button("Undo") { model.undoLast() }
+                .keyboardShortcut("z", modifiers: .command)
                 .buttonStyle(SoftButtonStyle())
             Button("Dismiss") { model.dismissUndo() }
                 .buttonStyle(SoftButtonStyle())

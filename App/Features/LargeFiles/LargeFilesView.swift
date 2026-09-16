@@ -188,6 +188,7 @@ struct LargeFilesView: View {
                 Spacer()
                 if model.isScanning {
                     Button("Cancel") { model.cancel() }
+                        .keyboardShortcut(.cancelAction)
                         .buttonStyle(SoftButtonStyle())
                 } else {
                     Button {
@@ -196,6 +197,7 @@ struct LargeFilesView: View {
                         Label("Scan", systemImage: "magnifyingglass")
                     }
                     .buttonStyle(GradientButtonStyle())
+                    .keyboardShortcut("r", modifiers: .command)
                 }
             }
         }
@@ -318,6 +320,8 @@ struct LargeFilesView: View {
                 Label("Quick Look", systemImage: "eye")
             }
             .buttonStyle(SoftButtonStyle())
+            // Space bar previews the selection, same as in Finder.
+            .keyboardShortcut(.space, modifiers: [])
             .disabled(model.selection.isEmpty)
 
             Button {
@@ -329,6 +333,7 @@ struct LargeFilesView: View {
                 disabled: model.selection.isEmpty || !gate.canCleanNow
             ))
             .disabled(model.selection.isEmpty || !gate.canCleanNow)
+            .keyboardShortcut(.delete, modifiers: .command)
         }
         .padding(14)
         .glassCard(padded: false)
@@ -343,6 +348,7 @@ struct LargeFilesView: View {
                 .font(.system(size: 13, weight: .medium))
             Spacer()
             Button("Undo") { model.undoLast() }
+                .keyboardShortcut("z", modifiers: .command)
                 .buttonStyle(SoftButtonStyle())
             Button("Dismiss") { model.dismissUndo() }
                 .buttonStyle(SoftButtonStyle())

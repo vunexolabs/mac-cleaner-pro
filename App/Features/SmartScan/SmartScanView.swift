@@ -259,6 +259,7 @@ struct SmartScanView: View {
             Spacer()
             if model.isScanning {
                 Button("Cancel") { model.cancel() }
+                    .keyboardShortcut(.cancelAction)
                     .buttonStyle(SoftButtonStyle())
             } else {
                 Button {
@@ -335,6 +336,7 @@ struct SmartScanView: View {
                 }
                 .buttonStyle(GradientButtonStyle())
                 .frame(height: 48)
+                .keyboardShortcut("r", modifiers: .command)
             }
 
             // Trust line
@@ -427,6 +429,9 @@ struct SmartScanView: View {
                 disabled: model.totalReclaimable == 0 || model.isCleaning || !gate.canCleanNow
             ))
             .disabled(model.totalReclaimable == 0 || model.isCleaning || !gate.canCleanNow)
+            // ⌘⌫ is the system-wide "move to Trash" gesture, which is exactly
+            // what Clean does.
+            .keyboardShortcut(.delete, modifiers: .command)
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 14)
@@ -455,6 +460,7 @@ struct SmartScanView: View {
             }
             Spacer()
             Button("Undo") { model.undoLast() }
+                .keyboardShortcut("z", modifiers: .command)
                 .buttonStyle(SoftButtonStyle())
             Button("Dismiss") { model.dismissUndo() }
                 .buttonStyle(SoftButtonStyle())

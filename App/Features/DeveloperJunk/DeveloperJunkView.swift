@@ -227,6 +227,7 @@ struct DeveloperJunkView: View {
             Spacer(minLength: 16)
             if model.isScanning {
                 Button("Cancel") { model.cancel() }
+                    .keyboardShortcut(.cancelAction)
                     .buttonStyle(.bordered)
             } else {
                 Button { model.addFolder() } label: {
@@ -234,6 +235,7 @@ struct DeveloperJunkView: View {
                 }
                 .buttonStyle(.bordered)
                 Button(model.hasScanned ? "Rescan" : "Scan") { model.scan() }
+                    .keyboardShortcut("r", modifiers: .command)
                     .buttonStyle(.borderedProminent)
             }
         }
@@ -272,6 +274,7 @@ struct DeveloperJunkView: View {
             Spacer()
             if model.lastUndoToken != nil {
                 Button("Undo") { model.undoLast() }.buttonStyle(.bordered)
+                    .keyboardShortcut("z", modifiers: .command)
                 Button("Done") { model.dismissUndo() }.buttonStyle(.borderless)
             }
         }
@@ -305,6 +308,7 @@ struct DeveloperJunkView: View {
             }
             .buttonStyle(.borderedProminent)
             .disabled(model.selected.isEmpty || model.isCleaning)
+            .keyboardShortcut(.delete, modifiers: .command)
         }
         .padding(.horizontal, 28)
         .padding(.vertical, 14)
