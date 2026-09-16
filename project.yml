@@ -8,6 +8,7 @@ name: MacCleanerPro
 
 options:
   bundleIdPrefix: com.maccleanerpro
+  developmentLanguage: en
   deploymentTarget:
     macOS: "13.0"
   createIntermediateGroups: true
@@ -109,6 +110,11 @@ targets:
         INFOPLIST_FILE: App/Info.plist
         CODE_SIGN_ENTITLEMENTS: App/MacCleanerPro.entitlements
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        # Extract localizable strings into App/Localizable.xcstrings on build.
+        # Xcode picks up Text("…") and other literals automatically; strings
+        # built in Swift need String(localized:) — see CONTRIBUTING.md.
+        SWIFT_EMIT_LOC_STRINGS: YES
+        LOCALIZATION_PREFERS_STRING_CATALOGS: YES
         ENABLE_HARDENED_RUNTIME: YES
         ENABLE_APP_SANDBOX: NO
         COMBINE_HIDPI_IMAGES: YES

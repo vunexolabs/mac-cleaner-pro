@@ -51,7 +51,16 @@ for myself:
   pack *signing* is maintainer-only (the private key isn't in this repo by
   design — see `docs/rule-pack-signing.md`), but you can absolutely propose
   new rules via PR and I'll sign a release.
-- **Localization.**
+- **Localization.** There is a String Catalog at `App/Localizable.xcstrings`
+  and the app target extracts into it on every build. To add a language, open
+  the catalog in Xcode, hit **+** in the language list, and translate. Two
+  things to know before you start: `Text("…")` literals are picked up
+  automatically, but strings assembled in Swift (most of the status messages in
+  the view models, e.g. `"Moved \(formattedSize(bytes))"`) are **not** — those
+  need converting to `String(localized:)` with interpolation placeholders
+  first, and that conversion is itself a welcome PR. Right now the catalog is
+  empty and English is the only language, so nothing is mistranslated — it's a
+  starting point, not a finished pipeline.
 - **Docs fixes** — anything unclear in `docs/`.
 - **Bug fixes** with a minimal repro.
 
