@@ -27,6 +27,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # First, and deliberately before the toolchain: pure grep/awk, fails in
+      # seconds. The README badge has silently sat three releases behind what
+      # actually shipped, which is the kind of thing a visitor notices before
+      # anything else on the repo page.
+      - name: Check version consistency
+        run: ./tools/check-version.sh
+
       # Swift 5.10 (see project.yml) needs Xcode 15.3 or newer. Printed rather
       # than pinned: a pinned Xcode path rots every time the runner image is
       # updated, and when a build does break on a toolchain change this is the

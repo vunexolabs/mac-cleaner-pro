@@ -4,6 +4,8 @@
 
 # Mac Cleaner Pro
 
+**A free, open-source macOS cleaner and CleanMyMac alternative.**
+
 **A native, honest macOS cleaner.**
 
 No telemetry. No cloud uploads. No subscription. Every deletion undoable.
@@ -21,6 +23,8 @@ No telemetry. No cloud uploads. No subscription. Every deletion undoable.
 </div>
 
 ---
+
+## Why Mac Cleaner Pro?
 
 Apple's storage panel hides gigabytes behind a single opaque number called
 **System Data**. Mac Cleaner Pro breaks that number down rule by rule, shows
@@ -41,10 +45,24 @@ developer. Every feature is unlocked for everyone: no trial, no paywall, no
 ## 📥 Download
 
 Prebuilt releases: **[maccleanerpro.com](https://maccleanerpro.com)** or this
-repo's [Releases](../../releases) page. Release notes for every version live at
+repo's [Releases](../../releases) page. Release notes for every version are in
+[CHANGELOG.md](CHANGELOG.md), and on
 **[maccleanerpro.com/changelog](https://maccleanerpro.com/changelog/)**.
 
 Prefer to compile it yourself? See [Build from source](#-build-from-source).
+
+### 🔍 Verifying your download
+
+This build isn't notarized, so a published checksum is how you confirm the DMG
+you downloaded is the DMG that was built. Every release ships a `.sha256`
+sidecar next to the disk image:
+
+```sh
+shasum -a 256 -c MacCleanerPro-<version>.dmg.sha256
+```
+
+The expected hash is also printed in the release notes. If it doesn't match,
+don't open it — [open an issue](../../issues/new/choose).
 
 ### 💻 Requirements
 
@@ -103,13 +121,48 @@ then hit **Clean** — and use **Undo** if you change your mind.
 | 🧠 **Memory Manager** | Live RAM pressure gauge, top-consumer list, and a **Quick Free** that applies memory pressure so the kernel drops cached pages — skipped outright, with a reason, when your Mac is already swapping. Quitting apps asks them politely first, so unsaved work gets its save prompt. |
 | 🗑️ **App Uninstaller** | Drag-to-Trash leaves scraps behind. This finds them across **12 user-space** and **6 system-space** Library locations — containers, prefs, launch agents, HTTP storages, WebKit data and more. |
 | 👯 **Duplicate Finder** | Two-pass scan: bucket by size, then confirm with **SHA-256** — no false positives, and the newest copy is pre-selected as the keeper. |
-| 🛠️ **Developer Junk** | One pruned pass for `node_modules`, `.next`, `target`, `.gradle`, `Pods`, `__pycache__`, `venv`, `.tox` and friends — each confirmed by its sibling manifest (`package.json`, `Cargo.toml`, `Podfile`…) so nothing is guessed at. |
+| 🛠️ **Developer Junk** | One pruned pass across **21 artefact folders** — `node_modules`, `.next`, `target`, `Pods`, `.gradle`, `__pycache__`, `venv`, `.tox` and more. **Eleven** are confirmed by a sibling manifest (`package.json`, `Cargo.toml`, `Podfile`, `build.gradle`…) before they're offered; the rest are toolchain caches with no project context, and `venv` / `.venv` / `.tox` are flagged **review recommended** rather than pre-ticked. `/System/`, `/Library/`, `/Applications/` and `~/Library/` are never descended, and symlinks are not followed. |
 | 📜 **Activity Log** | An append-only audit trail of every clean, undo and freed byte, stored as plain JSON at `~/Library/Application Support/MacCleanerPro/activity.json` — readable without the app. |
 
 > [!NOTE]
-> A few system-level items — system cache rules and system-space uninstaller
-> leftovers — are marked **"Requires helper"** in the UI and stay switched off
-> until the privileged helper ships. See [Ship status](#-ship-status).
+> Two system-level things are marked **"Requires helper"** in the UI and stay
+> switched off until the privileged helper ships: **one** cleanup rule of the 21
+> (`system.caches`) and the six system-space uninstaller categories. Everything
+> else runs today. See [Ship status](#-ship-status).
+
+---
+
+## 📊 How it compares
+
+Two rows here are things Mac Cleaner Pro *doesn't* have yet. They're at the top
+on purpose — a comparison table that only flatters its author isn't worth
+reading, and these are the first two questions anyone sensible will ask.
+
+| | Mac Cleaner Pro | CleanMyMac | MacSai | PureMac |
+|---|---|---|---|---|
+| **Apple notarized** | ❌ **Not yet** — needs the $99/yr programme | ✅ | ✅ | Not verified |
+| **Homebrew cask** | ❌ **Not yet** — needs notarization first | ✅ | ✅ | Not verified |
+| Price | Free | Paid | Free | Free |
+| Open source | ✅ MIT | ❌ | ✅ | ✅ MIT |
+| Telemetry | None | Not verified | Not verified | Not verified |
+| Undo after cleaning | ✅ 30 days, survives relaunch | Not verified | Not verified | Not verified |
+| Signed rule pack | ✅ Ed25519, verified before use | Not verified | Not verified | Not verified |
+
+"Not verified" means exactly that — we haven't confirmed it from the vendor's
+own documentation, and we'd rather leave a gap than guess about someone else's
+product. Corrections welcome via
+[an issue](../../issues/new/choose).
+
+*CleanMyMac is a trademark of MacPaw Inc. MacSai and PureMac are independent
+open-source projects. No affiliation or endorsement is implied.*
+
+---
+
+## 🍺 Homebrew
+
+Not yet. A Homebrew cask needs a notarized, Developer-ID-signed build, which
+needs the $99/yr Apple Developer Program — the same blocker as the privileged
+helper. It's what [donations](#-support-the-project) fund first.
 
 ---
 
@@ -140,6 +193,13 @@ explicit about it:
    ID or exact name; developer artifacts must have a confirming sibling
    manifest. When in doubt, a rule is flagged **review recommended** rather than
    pre-ticked.
+5. **Caches that cost you more than they free.** Cleaning user caches skips
+   **17 Apple caches by name** — Safari webpage previews, CloudKit, HomeKit,
+   Photos, Contacts, Apple Media Services, Music, TV, Mail, Notes, Find My,
+   News, Maps, Spotlight suggestions and iCloud sync among them. Deleting those
+   buys you very little disk and costs you re-downloads and re-indexing. The
+   full list is in
+   [`RulePacks/v1.json`](RulePacks/v1.json) — it's checkable, not a promise.
 
 ### 🔐 Privacy promise
 
