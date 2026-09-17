@@ -89,10 +89,24 @@ hdiutil create \
   -ov -format UDZO \
   "$DMG"
 
+# Checksum. This has to run AFTER hdiutil, or the hash won't describe the file
+# anyone actually downloads. Until the app is notarized, a published SHA-256 is
+# the only way for someone to verify that the DMG they fetched is the DMG we
+# built, so it ships as a release asset alongside the disk image.
+echo "==> Checksum"
+DMG_NAME="$(basename "$DMG")"
+( cd "$OUT" && shasum -a 256 "$DMG_NAME" > "$DMG_NAME.sha256" )
+SHA="$(awk '{print $1}' "$DMG.sha256")"
+
 echo
 echo "Done."
-echo "  DMG: $DMG"
+echo "  DMG:    $DMG"
+echo "  SHA256: $SHA"
+echo "  Sidecar: $DMG.sha256"
 echo
-echo "Note: This build is ad-hoc signed. Recipients will see a Gatekeeper warning"
-echo "on first launch. Direct them to docs/INSTALL.md for the right-click → Open"
-echo "workaround. Notarization requires an Apple Developer Program membership (\$99/yr)."
+echo "Publish the hash with the release, and verify a download with:"
+echo "  shasum -a 256 -c $DMG_NAME.sha256"
+echo
+echo "Note: This build is ad-hoc signed. Recipients will see a Gatekeeper prompt"
+echo "on first launch. Direct them to docs/INSTALL.md for the one-time approval."
+echo "Notarization requires an Apple Developer Program membership (\$99/yr)."

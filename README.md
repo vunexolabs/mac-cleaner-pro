@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="App/mcp_logo.png" alt="Mac Cleaner Pro" width="150">
+<img src="docs/assets/logo-300.png" alt="Mac Cleaner Pro" width="128">
 
 # Mac Cleaner Pro
 
@@ -12,7 +12,7 @@ No telemetry. No cloud uploads. No subscription. Every deletion undoable.
 [![macOS](https://img.shields.io/badge/macOS-13.0%2B-000000?style=flat-square&logo=apple&logoColor=white)](#-requirements)
 [![Swift](https://img.shields.io/badge/Swift-5.10-F05138?style=flat-square&logo=swift&logoColor=white)](#-architecture)
 [![SwiftUI](https://img.shields.io/badge/UI-SwiftUI-0071E3?style=flat-square&logo=swift&logoColor=white)](#-architecture)
-[![Version](https://img.shields.io/badge/version-1.0.4-blue?style=flat-square)](../../releases)
+[![Version](https://img.shields.io/badge/version-1.0.7-blue?style=flat-square)](../../releases)
 [![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
 [![Telemetry](https://img.shields.io/badge/telemetry-none-brightgreen?style=flat-square)](#-privacy-promise)
 

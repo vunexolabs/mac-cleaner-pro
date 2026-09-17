@@ -48,10 +48,10 @@ final class SettingsModel: ObservableObject {
                 self.licenseState = state
                 if case .pro = state {
                     self.activationFailed = false
-                    self.activationMessage = "License activated — Pro features unlocked."
+                    self.activationMessage = "Supporter key recognised — thanks. Every feature was already unlocked."
                 } else {
                     self.activationFailed = true
-                    self.activationMessage = "Not a valid license key."
+                    self.activationMessage = "That key wasn't recognised. Nothing is gated either way — every feature stays available."
                 }
             }
             await LicenseGate.shared.refresh()
@@ -122,7 +122,7 @@ struct SettingsView: View {
                 SectionHeader(
                     eyebrow: "Preferences",
                     title: "Settings",
-                    subtitle: "Personalize how Mac Cleaner Pro looks, behaves, and reports."
+                    subtitle: "Personalize how Mac Cleaner Pro looks and behaves."
                 )
 
                 appearanceCard

@@ -1,20 +1,26 @@
 # Installing Mac Cleaner Pro
 
-Mac Cleaner Pro v1.0 ships **without notarization** while we bootstrap. macOS Gatekeeper will warn you on first launch. This is a **one-time** workaround — every subsequent launch opens normally.
+Mac Cleaner Pro ships ad-hoc signed and **not notarized**. macOS Gatekeeper will ask you to confirm the first launch. This is a **one-time** approval — every subsequent launch opens normally.
 
 ## Step 1 — Drag to Applications
 
-1. Open the downloaded `MacCleanerPro-1.0.0.dmg`.
+1. Open the downloaded `MacCleanerPro-<version>.dmg`.
 2. Drag **Mac Cleaner Pro** onto the **Applications** folder shortcut.
 3. Eject the DMG.
 
-## Step 2 — First launch (the Gatekeeper bypass)
+## Step 2 — Verify the download (optional, 5 seconds)
 
-If you double-click the app, macOS will say:
+Every release publishes a SHA-256 hash. Because this build isn't notarized, this is how you confirm the file you downloaded is the file we built:
 
-> "Mac Cleaner Pro" cannot be opened because Apple cannot check it for malicious software.
+```sh
+shasum -a 256 ~/Downloads/MacCleanerPro-<version>.dmg
+```
 
-Don't worry — that just means we haven't paid Apple's $99/yr developer fee yet. Bypass it once:
+Compare the output with the hash on the [release page](https://github.com/vunexolabs/mac-cleaner-pro/releases). If they differ, don't open it — tell us.
+
+## Step 3 — First launch (one-time approval)
+
+On first launch, macOS shows a dialog saying it can't verify the developer, and offers only **Done** or **Cancel**. That's Gatekeeper reporting, accurately, that this build isn't notarized — we haven't paid Apple's $99/yr developer fee yet. Approve it once:
 
 1. Open the **Applications** folder in Finder.
 2. **Right-click** (or Control-click) **Mac Cleaner Pro**.
@@ -23,9 +29,9 @@ Don't worry — that just means we haven't paid Apple's $99/yr developer fee yet
 
 After this once, double-clicking will always work.
 
-> **Why is this needed?** Apple requires every distributed app to be signed by a paid Developer ID and notarized through their service. Until Mac Cleaner Pro reaches that revenue milestone, we ship ad-hoc signed builds that work identically — Gatekeeper just adds a one-time prompt.
+> **Why is this needed?** Apple requires every distributed app to be signed by a paid Developer ID and notarized through their service. Until donations cover that fee, we ship ad-hoc signed builds that work identically — Gatekeeper just adds a one-time prompt. The source is public, and every release publishes a checksum, so you don't have to take our word for what's in the build.
 
-## Step 3 — Grant Full Disk Access
+## Step 4 — Grant Full Disk Access
 
 The first-run wizard will guide you through this. You'll need to:
 
