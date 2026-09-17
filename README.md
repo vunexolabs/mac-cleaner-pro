@@ -18,7 +18,7 @@ No telemetry. No cloud uploads. No subscription. Every deletion undoable.
 [![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
 [![Telemetry](https://img.shields.io/badge/telemetry-none-brightgreen?style=flat-square)](#-privacy-promise)
 
-[**Download**](#-download) · [**Quick start**](#-quick-start) · [**Features**](#-features) · [**Build from source**](#-build-from-source) · [**Architecture**](#-architecture) · [**Contributing**](#-contributing)
+[**Screenshots**](#-screenshots) · [**Download**](#-download) · [**Quick start**](#-quick-start) · [**Features**](#-features) · [**Build from source**](#-build-from-source) · [**Architecture**](#-architecture) · [**Contributing**](#-contributing)
 
 </div>
 
@@ -39,6 +39,38 @@ developer. Every feature is unlocked for everyone: no trial, no paywall, no
 | 🔒 **Nothing leaves your Mac** | No analytics, no crash pipelines, no accounts. A fresh install makes no network calls at all. |
 | ↩️ **Nothing is deleted outright** | Every removal is staged in the Trash under a per-action token, so Undo works even after a relaunch. |
 | ✍️ **Nothing is deleted on a guess** | The list of what's cleanable ships as an **Ed25519-signed rule pack** that the app verifies before it trusts a single path. |
+
+---
+
+## 📸 Screenshots
+
+<div align="center">
+
+<img src="docs/screenshots/smart-scan.webp" alt="Smart Scan results — 2.9 GB reclaimable, with Safe and Review badges per rule and System caches marked Requires helper" width="820">
+
+<em>Smart Scan. Every rule is labelled <strong>Safe</strong> or <strong>Review</strong>, and anything needing the privileged helper says so instead of pretending to work.</em>
+
+</div>
+
+|  |  |
+|---|---|
+| <img src="docs/screenshots/space-lens-sunburst.webp" alt="Space Lens sunburst chart mapping 103 GB of disk usage" width="420"><br>**Space Lens** — every byte, mapped. Sunburst or treemap. | <img src="docs/screenshots/developer-junk.webp" alt="Developer Junk listing build artefacts with restore commands" width="420"><br>**Developer Junk** — 10.66 GB here, each item labelled with the command that brings it back. |
+| <img src="docs/screenshots/uninstaller.webp" alt="App Uninstaller showing leftover files grouped by category" width="420"><br>**App Uninstaller** — the leftovers drag-to-Trash misses. | <img src="docs/screenshots/activity-log.webp" alt="Activity Log audit trail showing cleans and permanent removals" width="420"><br>**Activity Log** — an audit trail you can undo from. |
+
+<details>
+<summary>More screens — Duplicate Finder, Large &amp; Old Files, Memory, treemap</summary>
+
+<br>
+
+|  |  |
+|---|---|
+| <img src="docs/screenshots/duplicate-finder.webp" alt="Duplicate Finder grouping identical files with the newest copy kept" width="420"><br>**Duplicate Finder** — hash-matched, newest copy pre-selected as the keeper. | <img src="docs/screenshots/large-old-files.webp" alt="Large and Old Files table sorted by size" width="420"><br>**Large &amp; Old Files** — walk any folder by size and age. |
+| <img src="docs/screenshots/memory.webp" alt="Memory manager showing live RAM usage and top consumers" width="420"><br>**Memory** — live pressure, top consumers, honest about what it can't do. | <img src="docs/screenshots/space-lens-treemap.webp" alt="Space Lens treemap view of disk usage" width="420"><br>**Space Lens (treemap)** — same scan, different lens. |
+
+</details>
+
+> Paths in these screenshots are blurred — they're real scans of a real Mac, and
+> the folder names aren't ours to publish.
 
 ---
 
