@@ -131,11 +131,16 @@ struct UninstallerView: View {
     @StateObject private var gate = LicenseGate.shared
 
     var body: some View {
+        // Minimums have to fit the narrowest window. The floor is 720pt and the
+        // navigation sidebar takes ~200 of it, so these two panes get about
+        // 520. They asked for 280 + 380 = 660, and the shortfall was taken out
+        // of the sidebar — which is why opening this tab visibly shoved the
+        // sidebar left and clipped the logo against the window edge.
         HSplitView {
             appList
-                .frame(minWidth: 280, idealWidth: 320)
+                .frame(minWidth: 200, idealWidth: 280)
             detail
-                .frame(minWidth: 380)
+                .frame(minWidth: 280)
         }
         .onAppear { if model.apps.isEmpty { model.loadApps() } }
     }
