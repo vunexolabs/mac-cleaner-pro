@@ -15,7 +15,7 @@ struct ThemeToggle: View {
                 ForEach(Appearance.allCases) { mode in
                     if mode == theme.appearance {
                         Image(systemName: mode.systemImage)
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(Theme.Text.control.weight(.semibold))
                             .foregroundStyle(Theme.brandGradient)
                             .transition(.asymmetric(
                                 insertion: .scale(scale: 0.4).combined(with: .opacity),

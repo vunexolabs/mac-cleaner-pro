@@ -74,32 +74,32 @@ struct ScanProgressCard: View {
                 HStack(spacing: 7) {
                     PulsingDot(color: Theme.accent, size: 7)
                     Text("LIVE")
-                        .font(.system(size: 10, weight: .bold))
+                        .font(Theme.Text.eyebrow.weight(.bold))
                         .tracking(1.6)
                         .foregroundStyle(Theme.accent)
                 }
                 Text(model.liveCurrentRule.isEmpty
                      ? "Preparing scan…"
                      : "Scanning \(model.liveCurrentRule)")
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(Theme.Text.sectionTitle)
                     .contentTransition(.opacity)
                     .animation(.easeOut(duration: 0.25), value: model.liveCurrentRule)
                 Text("Walking your filesystem in parallel · zero telemetry")
-                    .font(.system(size: 12))
+                    .font(Theme.Text.caption)
                     .foregroundStyle(.secondary)
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 2) {
                 HStack(alignment: .firstTextBaseline, spacing: 1) {
                     Text("\(Int(phase * 100))")
-                        .font(.system(size: 32, weight: .bold).monospacedDigit())
+                        .font(Theme.Text.metricLarge)
                         .foregroundStyle(Theme.brandGradient)
                     Text("%")
-                        .font(.system(size: 18, weight: .semibold))
+                        .font(Theme.Text.sectionTitle)
                         .foregroundStyle(.secondary)
                 }
                 Text("rule \(model.liveRuleIndex + 1) of \(max(1, model.liveRuleTotal))")
-                    .font(.system(size: 9, weight: .semibold))
+                    .font(Theme.Text.eyebrow)
                     .tracking(1.2)
                     .textCase(.uppercase)
                     .foregroundStyle(.secondary)
@@ -147,12 +147,12 @@ struct ScanProgressCard: View {
 
                 VStack(spacing: 4) {
                     Text(bytesText)
-                        .font(.system(size: 26, weight: .bold).monospacedDigit())
+                        .font(Theme.Text.metricLarge)
                         .foregroundStyle(Theme.brandGradient)
                         .contentTransition(.numericText())
                         .animation(.easeOut(duration: 0.18), value: model.liveBytesScanned)
                     Text("scanned so far")
-                        .font(.system(size: 9, weight: .semibold))
+                        .font(Theme.Text.eyebrow)
                         .tracking(1.4)
                         .textCase(.uppercase)
                         .foregroundStyle(.secondary)
@@ -169,12 +169,12 @@ struct ScanProgressCard: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text("LIVE STREAM")
-                    .font(.system(size: 9, weight: .bold))
+                    .font(Theme.Text.eyebrow.weight(.bold))
                     .tracking(1.6)
                     .foregroundStyle(.secondary)
                 Spacer()
                 Text(streamSubtitle)
-                    .font(.system(size: 11))
+                    .font(Theme.Text.caption)
                     .foregroundStyle(.secondary)
                     .contentTransition(.opacity)
                     .animation(.easeOut(duration: 0.25), value: streamSubtitle)
@@ -188,7 +188,7 @@ struct ScanProgressCard: View {
                 let displayed = Array(model.liveStreamPaths.suffix(5).enumerated())
                 if displayed.isEmpty {
                     Text("Discovering files…")
-                        .font(.system(size: 11.5).monospaced())
+                        .font(Theme.Text.caption.monospaced())
                         .foregroundStyle(.secondary)
                         .padding(.vertical, 5.5)
                 } else {
@@ -198,7 +198,7 @@ struct ScanProgressCard: View {
                                 .fill(idx == displayed.count - 1 ? Theme.accent : Color.secondary.opacity(0.4))
                                 .frame(width: 2, height: 14)
                             Text(path)
-                                .font(.system(size: 11.5).monospaced())
+                                .font(Theme.Text.caption.monospaced())
                                 .foregroundStyle(idx == displayed.count - 1 ? Color.primary : Color.secondary)
                                 .lineLimit(1)
                                 .truncationMode(.middle)
@@ -273,15 +273,15 @@ struct ScanProgressCard: View {
     private func statItem(icon: String, value: String, label: String) -> some View {
         HStack(spacing: 8) {
             Image(systemName: icon)
-                .font(.system(size: 11, weight: .medium))
+                .font(Theme.Text.caption.weight(.medium))
                 .foregroundStyle(Theme.accent.opacity(0.8))
             VStack(alignment: .leading, spacing: 0) {
                 Text(value)
-                    .font(.system(size: 14, weight: .semibold).monospacedDigit())
+                    .font(Theme.Text.metric)
                     .contentTransition(.numericText())
                     .animation(.easeOut(duration: 0.18), value: value)
                 Text(label)
-                    .font(.system(size: 10, weight: .medium))
+                    .font(Theme.Text.eyebrow.weight(.medium))
                     .tracking(0.4)
                     .textCase(.uppercase)
                     .foregroundStyle(.secondary)

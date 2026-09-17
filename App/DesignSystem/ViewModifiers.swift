@@ -7,10 +7,17 @@ private struct GlassCard: ViewModifier {
     var padded: Bool = true
     func body(content: Content) -> some View {
         content
-            .padding(padded ? 16 : 0)
+            .padding(padded ? Layout.s4 : 0)
+            // Material over the mild dark canvas resolved as a flat grey patch
+            // with no sense of depth. An explicit elevated surface reads as a
+            // card in both modes, and keeps the light appearance as it was.
             .background(
                 RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .fill(.ultraThinMaterial)
+                    .fill(Theme.surface)
+                    .background(
+                        RoundedRectangle(cornerRadius: radius, style: .continuous)
+                            .fill(.ultraThinMaterial)
+                    )
             )
             .overlay(
                 RoundedRectangle(cornerRadius: radius, style: .continuous)
@@ -34,7 +41,7 @@ struct Eyebrow: View {
         HStack(spacing: 6) {
             PulsingDot(size: 5)
             Text(text)
-                .font(.system(size: 11, weight: .semibold))
+                .font(Theme.Text.eyebrow)
                 .tracking(1.4)
                 .textCase(.uppercase)
                 .foregroundStyle(.secondary)
@@ -64,17 +71,18 @@ struct SectionHeader: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Layout.s2) {
             if let eyebrow {
                 Eyebrow(text: eyebrow)
             }
             Text(title)
-                .font(.system(size: 22, weight: .semibold))
+                .font(Theme.Text.title)
                 .tracking(-0.4)
             if let subtitle {
                 Text(subtitle)
-                    .font(.callout)
+                    .font(Theme.Text.body)
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
@@ -87,10 +95,10 @@ struct GradientButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.system(size: 14, weight: .semibold))
+            .font(Theme.Text.control.weight(.semibold))
             .foregroundStyle(.white)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 9)
+            .padding(.horizontal, Layout.s4)
+            .padding(.vertical, Layout.s2 + 1)
             .background(
                 Capsule()
                     .fill(disabled
@@ -115,10 +123,10 @@ struct GradientButtonStyle: ButtonStyle {
 struct SoftButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.system(size: 13, weight: .medium))
+            .font(Theme.Text.control)
             .foregroundStyle(.primary)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 7)
+            .padding(.horizontal, Layout.s3 + 2)
+            .padding(.vertical, Layout.s2 - 1)
             .background(
                 Capsule().fill(.ultraThinMaterial)
             )
@@ -140,10 +148,10 @@ struct StatusChip: View {
 
     var body: some View {
         Text(text)
-            .font(.system(size: 10, weight: .semibold))
+            .font(Theme.Text.eyebrow)
             .foregroundStyle(color)
-            .padding(.horizontal, 7)
-            .padding(.vertical, 2)
+            .padding(.horizontal, Layout.s2 - 1)
+            .padding(.vertical, Layout.s1 / 2)
             .background(Capsule().fill(color.opacity(0.14)))
             .overlay(Capsule().strokeBorder(color.opacity(0.34), lineWidth: 1))
     }
@@ -164,12 +172,26 @@ struct StatusChip: View {
 struct LogoMark: View {
     var size: CGFloat = 22
     var body: some View {
-        Image(nsImage: NSApp.applicationIconImage)
+        // The transparent mark, not NSApp.applicationIconImage. The app icon is
+        // deliberately full-bleed white so macOS can mask it into its own
+        // squircle, which is right on the Dock and wrong in a dark sidebar,
+        // where it drew as a white tile around the logo.
+        Image(nsImage: Self.mark)
             .resizable()
             .interpolation(.high)
             .scaledToFit()
             .frame(width: size, height: size)
     }
+
+    private static let mark: NSImage = {
+        if let url = Bundle.main.url(forResource: "mcp_logo_mark", withExtension: "png"),
+           let image = NSImage(contentsOf: url) {
+            return image
+        }
+        // Falling back to the app icon keeps the lockup present rather than
+        // blank if the resource ever goes missing.
+        return NSApp.applicationIconImage
+    }()
 }
 
 // MARK: - Gradient text

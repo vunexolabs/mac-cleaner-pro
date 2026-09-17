@@ -64,9 +64,32 @@ public enum DeletionError: Error, Sendable {
 /// surface "Recently cleaned" across launches. Files staged in `~/.Trash/` are
 /// also visible in Finder's Trash, where the user can empty them manually — at
 /// which point our undo will fail cleanly with `sourceMissing`.
+/// How the user wants cleaned files disposed of.
+public enum DeletionMode: String, Sendable, CaseIterable {
+    /// Move to `~/.Trash/MacCleanerPro/<UUID>/`, recoverable until the Trash is
+    /// emptied or the retention window elapses. The default, and the reason
+    /// this app can offer undo at all.
+    case trash
+    /// Delete outright. No undo, no Activity Log restore, nothing to put back.
+    case permanent
+
+    public var isReversible: Bool { self == .trash }
+}
+
 public actor DeletionService {
 
     public static let shared = DeletionService()
+
+    /// Disposal mode for subsequent cleans. `.trash` unless the user has
+    /// explicitly chosen otherwise in Settings.
+    ///
+    /// Deliberately not persisted here — Core has no business reading
+    /// UserDefaults — the app sets it at launch and whenever the setting
+    /// changes.
+    private var mode: DeletionMode = .trash
+
+    public func setMode(_ newMode: DeletionMode) { mode = newMode }
+    public func currentMode() -> DeletionMode { mode }
 
     private let fm = FileManager.default
     private var tokens: [UUID: UndoToken] = [:]
@@ -86,11 +109,15 @@ public actor DeletionService {
     public func trashWithFailures(urls: [URL],
                                   source: ActivityEntry.Source = .manual) async throws -> TrashResult {
         let id = UUID()
-        let staging = try newStagingDir(id: id)
         var entries: [StagedEntry] = []
         var failures: [DeletionFailure] = []
         var total: UInt64 = 0
 
+        guard mode == .trash else {
+            return try permanentlyDelete(urls: urls, id: id, source: source)
+        }
+
+        let staging = try newStagingDir(id: id)
         for url in urls {
             guard fm.fileExists(atPath: url.path) else { continue }
             let dest = uniqueDestination(in: staging, for: url)
@@ -113,6 +140,46 @@ public actor DeletionService {
         await ActivityLog.shared.append(ActivityEntry(
             kind: .clean, source: source, bytes: total,
             itemCount: entries.count, tokenID: id))
+        return TrashResult(token: token, failures: failures)
+    }
+
+    /// Delete outright, for users who have turned off trash-first in Settings.
+    ///
+    /// Returns a token with no entries: there is nothing staged, so undo has
+    /// nothing to restore. The Activity Log records the action with a note
+    /// saying so, because "cleaned 4 GB" with a dead Undo button would be worse
+    /// than saying plainly that it is gone.
+    private func permanentlyDelete(urls: [URL],
+                                   id: UUID,
+                                   source: ActivityEntry.Source) throws -> TrashResult {
+        var failures: [DeletionFailure] = []
+        var total: UInt64 = 0
+        var count = 0
+
+        for url in urls {
+            guard fm.fileExists(atPath: url.path) else { continue }
+            let bytes = (try? Self.allocatedSize(of: url)) ?? 0
+            do {
+                try fm.removeItem(at: url)
+                total &+= bytes
+                count += 1
+            } catch {
+                failures.append(DeletionFailure(url: url,
+                                                reason: Self.shortReason(from: error)))
+            }
+        }
+
+        let token = UndoToken(id: id, createdAt: Date(),
+                              stagingDir: Self.rootStagingDir(),
+                              entries: [], totalBytes: total)
+        // Not persisted: there is nothing to restore, so a record would only
+        // produce an undo affordance that cannot work.
+        Task { [total, count, id] in
+            await ActivityLog.shared.append(ActivityEntry(
+                kind: .empty, source: source, bytes: total,
+                itemCount: count, tokenID: id,
+                note: "Deleted permanently — trash-first is off"))
+        }
         return TrashResult(token: token, failures: failures)
     }
 
@@ -224,6 +291,12 @@ public actor DeletionService {
         if fm.fileExists(atPath: root.path) {
             try fm.removeItem(at: root)
         }
+        // Records live outside the Trash now, so clearing the staging root no
+        // longer takes them with it.
+        let records = Self.tokensDir()
+        if fm.fileExists(atPath: records.path) {
+            try? fm.removeItem(at: records)
+        }
         tokens.removeAll()
     }
 
@@ -235,8 +308,22 @@ public actor DeletionService {
     /// Trash in Finder) are dropped here rather than surfaced as undos that
     /// would fail with `sourceMissing`.
     public func loadPersistedTokens() async {
+        migrateLegacyTokensIfPresent()
+
         let dir = Self.tokensDir()
-        guard let names = try? fm.contentsOfDirectory(atPath: dir.path) else { return }
+        let names: [String]
+        do {
+            names = try fm.contentsOfDirectory(atPath: dir.path)
+        } catch {
+            // A missing directory is the normal first-run case. Anything else
+            // means undo-across-relaunch is silently broken, which is worth a
+            // line in the log rather than an empty list and no explanation.
+            if fm.fileExists(atPath: dir.path) {
+                NSLog("[DeletionService] cannot list \(dir.path): \(error.localizedDescription)")
+            }
+            return
+        }
+
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         for name in names where name.hasSuffix(".json") {
@@ -252,6 +339,25 @@ public actor DeletionService {
         }
     }
 
+    /// Move pre-1.0.5 records out of the Trash into Application Support.
+    ///
+    /// Best-effort by nature: listing the old directory is exactly the
+    /// operation TCC blocks, so this recovers tokens only on machines that have
+    /// granted Full Disk Access. There is no way to enumerate them otherwise —
+    /// which is the whole reason the location changed.
+    private func migrateLegacyTokensIfPresent() {
+        let legacy = Self.legacyTokensDir()
+        guard let names = try? fm.contentsOfDirectory(atPath: legacy.path) else { return }
+        let dest = Self.tokensDir()
+        try? fm.createDirectory(at: dest, withIntermediateDirectories: true)
+        for name in names where name.hasSuffix(".json") {
+            let from = legacy.appendingPathComponent(name)
+            let to = dest.appendingPathComponent(name)
+            guard !fm.fileExists(atPath: to.path) else { continue }
+            try? fm.moveItem(at: from, to: to)
+        }
+    }
+
     public func allTokens() async -> [UndoToken] {
         Array(tokens.values).sorted { $0.createdAt > $1.createdAt }
     }
@@ -260,8 +366,10 @@ public actor DeletionService {
     /// entry, which stores only the `tokenID`.
     public func token(id: UUID) async -> UndoToken? {
         if let token = tokens[id] { return token }
-        try? ingestFromDiskIfPresent(id)
-        return tokens[id]
+        // Read-through, deliberately without caching: `isRestorable` asks this
+        // question about tokens that may be dead, and an existence check has no
+        // business resurrecting one into the live map.
+        return readTokenFile(id)
     }
 
     /// Whether `id` can still be restored: we know the token and its staged
@@ -277,6 +385,8 @@ public actor DeletionService {
         guard let token = await token(id: id) else {
             throw DeletionError.unknownToken(id)
         }
+        // undo(_:) resolves through the in-memory map, so adopt it first.
+        tokens[token.id] = token
         try await undo(token)
     }
 
@@ -345,14 +455,23 @@ public actor DeletionService {
         try data.write(to: tokenFile(for: token.id), options: .atomic)
     }
 
-    private func ingestFromDiskIfPresent(_ id: UUID) throws {
+    /// Decode a token record from disk without touching in-memory state.
+    private func readTokenFile(_ id: UUID) -> UndoToken? {
         let url = tokenFile(for: id)
-        guard fm.fileExists(atPath: url.path) else { return }
-        let data = try Data(contentsOf: url)
+        guard fm.fileExists(atPath: url.path),
+              let data = try? Data(contentsOf: url) else { return nil }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        let token = try decoder.decode(UndoToken.self, from: data)
+        return try? decoder.decode(UndoToken.self, from: data)
+    }
+
+    /// Load a token from disk into the in-memory map, for callers that are
+    /// about to act on it.
+    @discardableResult
+    private func ingestFromDiskIfPresent(_ id: UUID) throws -> UndoToken? {
+        guard let token = readTokenFile(id) else { return nil }
         tokens[token.id] = token
+        return token
     }
 
     private func tokenFile(for id: UUID) -> URL {
@@ -369,7 +488,26 @@ public actor DeletionService {
         return trash.appendingPathComponent("MacCleanerPro", isDirectory: true)
     }
 
+    /// Where undo *records* live — deliberately NOT inside the Trash.
+    ///
+    /// macOS gates directory enumeration of `~/.Trash` behind Full Disk Access:
+    /// `fileExists`, reads, writes and deletes on a known path all succeed, but
+    /// `contentsOfDirectory` throws "you don't have permission to view it".
+    /// While the records lived in `rootStagingDir()/tokens`, `loadPersistedTokens()`
+    /// silently found nothing on any Mac that hadn't granted FDA yet — so undo
+    /// across a relaunch quietly did nothing, which is the one thing it exists
+    /// to do. Application Support is enumerable unconditionally.
+    ///
+    /// The staged *files* stay in the Trash; only the bookkeeping moved.
     static func tokensDir() -> URL {
+        URL(fileURLWithPath: NSHomeDirectory())
+            .appendingPathComponent("Library/Application Support/MacCleanerPro/undo-tokens",
+                                    isDirectory: true)
+    }
+
+    /// Pre-1.0.5 location, inside the Trash. Read once on launch so an upgrade
+    /// doesn't strand tokens written by an older build.
+    static func legacyTokensDir() -> URL {
         rootStagingDir().appendingPathComponent("tokens", isDirectory: true)
     }
 

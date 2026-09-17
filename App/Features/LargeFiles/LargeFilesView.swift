@@ -5,6 +5,11 @@ import Core
 
 @MainActor
 final class LargeFilesModel: ObservableObject {
+    /// Shared so a scan survives the user switching tabs. The detail pane
+    /// swaps views on selection, which destroys a @StateObject and everything
+    /// it was holding — including a Space Lens walk that took minutes.
+    static let shared = LargeFilesModel()
+
     @Published var root: URL = URL(fileURLWithPath: NSHomeDirectory())
     @Published var minSizeMB: Double = 100
     @Published var olderThanDays: Int = 0       // 0 = no age filter
@@ -113,7 +118,7 @@ final class LargeFilesModel: ObservableObject {
 }
 
 struct LargeFilesView: View {
-    @StateObject private var model = LargeFilesModel()
+    @ObservedObject private var model = LargeFilesModel.shared
     @StateObject private var gate = LicenseGate.shared
     @State private var sortOrder: [KeyPathComparator<FileEntry>] = [
         .init(\.size, order: .reverse)
@@ -123,6 +128,10 @@ struct LargeFilesView: View {
     private var showFooter: Bool { hasResults || model.isScanning }
 
     var body: some View {
+        // Scroll container for the same reason as Space Lens and Duplicate
+        // Finder — without it the page creeps into the title bar. The effect is
+        // milder here (about 15pt) but it is the same fault.
+        ScrollView {
         VStack(alignment: .leading, spacing: 18) {
             SectionHeader(
                 eyebrow: "Find what's heavy",
@@ -136,7 +145,8 @@ struct LargeFilesView: View {
         }
         .padding(.horizontal, 28)
         .padding(.vertical, 24)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        }
         .task { await gate.refresh() }
     }
 
@@ -146,7 +156,7 @@ struct LargeFilesView: View {
                 Image(systemName: "folder.fill")
                     .foregroundStyle(Theme.brandGradient)
                 Text(model.root.path)
-                    .font(.system(size: 13, design: .monospaced))
+                    .font(Theme.Text.mono)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
@@ -158,21 +168,31 @@ struct LargeFilesView: View {
             HStack(spacing: 18) {
                 HStack(spacing: 8) {
                     Text("Min size")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(Theme.Text.caption.weight(.semibold))
                         .tracking(1.2)
                         .textCase(.uppercase)
                         .foregroundStyle(.secondary)
-                    Slider(value: $model.minSizeMB, in: 10...2000, step: 10)
+                    // No `step:`. macOS renders tick marks for a stepped
+                    // slider, and 199 of them merged into a dashed line under
+                    // the track. Rounding in the binding keeps the 10 MB
+                    // granularity without drawing them.
+                    Slider(
+                        value: Binding(
+                            get: { model.minSizeMB },
+                            set: { model.minSizeMB = ($0 / 10).rounded() * 10 }
+                        ),
+                        in: 10...2000
+                    )
                         .tint(Theme.accent)
                         .frame(width: 180)
                     Text("\(Int(model.minSizeMB)) MB")
-                        .font(.system(size: 12, weight: .medium).monospacedDigit())
+                        .font(Theme.Text.metric)
                         .frame(width: 60, alignment: .trailing)
                 }
                 Divider().frame(height: 18)
                 HStack(spacing: 8) {
                     Text("Older than")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(Theme.Text.caption.weight(.semibold))
                         .tracking(1.2)
                         .textCase(.uppercase)
                         .foregroundStyle(.secondary)
@@ -241,7 +261,11 @@ struct LargeFilesView: View {
         }
         .tableStyle(.inset(alternatesRowBackgrounds: false))
         .scrollContentBackground(.hidden)
-        .frame(maxHeight: .infinity)
+        // A definite minimum, because maxHeight: .infinity alone collapses to
+        // nothing inside a ScrollView — and the empty state is an overlay on
+        // this table, so it then centred on a zero-height box and landed on top
+        // of the controls card above it.
+        .frame(minHeight: 380, maxHeight: .infinity)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(.ultraThinMaterial)
@@ -261,9 +285,9 @@ struct LargeFilesView: View {
                     }
                     VStack(spacing: 3) {
                         Text("Walking the filesystem…")
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(Theme.Text.control.weight(.semibold))
                         Text("Streaming files larger than \(Int(model.minSizeMB)) MB")
-                            .font(.system(size: 12))
+                            .font(Theme.Text.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -279,14 +303,14 @@ struct LargeFilesView: View {
                             )
                             .frame(width: 52, height: 52)
                         Image(systemName: "magnifyingglass")
-                            .font(.system(size: 22, weight: .semibold))
+                            .font(Theme.Text.title)
                             .foregroundStyle(Theme.accent)
                     }
                     VStack(spacing: 4) {
                         Text("Find your biggest, oldest files")
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(Theme.Text.control.weight(.semibold))
                         Text("Pick a folder, set a minimum size, and click Scan.")
-                            .font(.system(size: 12))
+                            .font(Theme.Text.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -303,13 +327,13 @@ struct LargeFilesView: View {
         HStack(spacing: 14) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("\(model.entries.count) files found · selected")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(Theme.Text.caption.weight(.semibold))
                     .tracking(1.0)
                     .textCase(.uppercase)
                     .foregroundStyle(.secondary)
                 AnimatedByteCount(
                     value: Double(model.totalSelectedBytes),
-                    font: .system(size: 22, weight: .semibold).monospacedDigit()
+                    font: Theme.Text.metricLarge
                 )
                 .animation(.easeInOut(duration: 0.4), value: model.totalSelectedBytes)
             }
@@ -342,10 +366,10 @@ struct LargeFilesView: View {
     private var undoBanner: some View {
         HStack(spacing: 12) {
             Image(systemName: "arrow.uturn.backward.circle.fill")
-                .font(.system(size: 18))
+                .font(Theme.Text.sectionTitle)
                 .foregroundStyle(Theme.ok)
             Text(model.actionMessage ?? "Files staged in trash")
-                .font(.system(size: 13, weight: .medium))
+                .font(Theme.Text.rowTitle)
             Spacer()
             Button("Undo") { model.undoLast() }
                 .keyboardShortcut("z", modifiers: .command)

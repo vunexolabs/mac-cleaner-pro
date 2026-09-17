@@ -227,6 +227,47 @@ final class DeletionServiceTests: XCTestCase {
         try await svc.empty(token)
     }
 
+    // MARK: - Deletion mode
+
+    func testDefaultModeIsTrashFirst() async {
+        let svc = DeletionService()
+        let mode = await svc.currentMode()
+        XCTAssertEqual(mode, .trash, "trash-first is the safe default and the basis for undo")
+        XCTAssertTrue(DeletionMode.trash.isReversible)
+        XCTAssertFalse(DeletionMode.permanent.isReversible)
+    }
+
+    func testPermanentModeDeletesOutrightAndStagesNothing() async throws {
+        let a = try touch("gone.bin", bytes: 4096)
+        let path = a.path
+
+        let svc = DeletionService()
+        await svc.setMode(.permanent)
+        let result = try await svc.trashWithFailures(urls: [a])
+
+        XCTAssertFalse(fm.fileExists(atPath: path), "the file should be gone, not staged")
+        XCTAssertTrue(result.token.entries.isEmpty, "nothing is staged, so there is nothing to restore")
+        XCTAssertGreaterThanOrEqual(result.token.totalBytes, 4096)
+
+        // And it must not advertise an undo it cannot honour.
+        let restorable = await svc.isRestorable(result.token.id)
+        XCTAssertFalse(restorable)
+    }
+
+    func testSwitchingBackToTrashStagesAgain() async throws {
+        let a = try touch("staged.bin")
+        let svc = DeletionService()
+        await svc.setMode(.permanent)
+        await svc.setMode(.trash)
+
+        let token = try await svc.trash(urls: [a])
+        XCTAssertEqual(token.entries.count, 1)
+        let restorable = await svc.isRestorable(token.id)
+        XCTAssertTrue(restorable)
+
+        try await svc.empty(token)
+    }
+
     func testRetentionWindowIsThirtyDays() {
         XCTAssertEqual(DeletionService.retentionDays, 30,
                        "onboarding and Smart Scan both promise a 30-day undo window")

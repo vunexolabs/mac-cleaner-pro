@@ -4,6 +4,11 @@ import AppKit
 
 @MainActor
 final class DeveloperJunkModel: ObservableObject {
+    /// Shared so a scan survives the user switching tabs. The detail pane
+    /// swaps views on selection, which destroys a @StateObject and everything
+    /// it was holding — including a Space Lens walk that took minutes.
+    static let shared = DeveloperJunkModel()
+
     @Published var artifacts: [DeveloperArtifact] = []
     @Published var selected: Set<URL> = []
     @Published var isScanning = false
@@ -164,7 +169,7 @@ final class DeveloperJunkModel: ObservableObject {
 }
 
 struct DeveloperJunkView: View {
-    @StateObject private var model = DeveloperJunkModel()
+    @ObservedObject private var model = DeveloperJunkModel.shared
 
     var body: some View {
         ScrollView {
@@ -218,9 +223,9 @@ struct DeveloperJunkView: View {
         HStack(alignment: .firstTextBaseline) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Developer Junk")
-                    .font(.system(size: 22, weight: .bold))
+                    .font(Theme.Text.title.weight(.bold))
                 Text("Build output and dependency caches across your code folders — each one labelled with how to bring it back.")
-                    .font(.system(size: 12))
+                    .font(Theme.Text.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -246,9 +251,9 @@ struct DeveloperJunkView: View {
             ProgressView().controlSize(.small)
             VStack(alignment: .leading, spacing: 2) {
                 Text("Scanned \(model.scannedDirectories) folders · found \(model.foundCount) · \(formattedDevSize(model.liveReclaimable))")
-                    .font(.system(size: 12, weight: .medium).monospacedDigit())
+                    .font(Theme.Text.metric)
                 Text(model.currentPath)
-                    .font(.system(size: 11).monospaced())
+                    .font(Theme.Text.caption.monospaced())
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
@@ -263,14 +268,14 @@ struct DeveloperJunkView: View {
 
     private var summaryLine: some View {
         Text("\(model.artifacts.count) item\(model.artifacts.count == 1 ? "" : "s") · \(formattedDevSize(model.artifacts.reduce(0) { $0 &+ $1.size })) reclaimable")
-            .font(.system(size: 12))
+            .font(Theme.Text.caption)
             .foregroundStyle(.secondary)
     }
 
     private func undoBar(_ msg: String) -> some View {
         HStack(spacing: 12) {
             Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.ok)
-            Text(msg).font(.system(size: 12, weight: .medium))
+            Text(msg).font(Theme.Text.caption.weight(.medium))
             Spacer()
             if model.lastUndoToken != nil {
                 Button("Undo") { model.undoLast() }.buttonStyle(.bordered)
@@ -294,7 +299,7 @@ struct DeveloperJunkView: View {
                 .buttonStyle(.link)
             Spacer()
             Text("\(model.selected.count) selected")
-                .font(.system(size: 12).monospacedDigit())
+                .font(Theme.Text.metric)
                 .foregroundStyle(.secondary)
             Button {
                 model.cleanSelected()
@@ -321,12 +326,12 @@ struct DeveloperJunkView: View {
     private var emptyState: some View {
         VStack(spacing: 14) {
             Image(systemName: "hammer.fill")
-                .font(.system(size: 40))
+                .font(Theme.Text.display)
                 .foregroundStyle(Theme.accent.opacity(0.7))
             Text("Scan your code folders for reclaimable build junk")
-                .font(.system(size: 15, weight: .semibold))
+                .font(Theme.Text.control.weight(.semibold))
             Text("Looks for node_modules, .next, build/, target, .gradle, __pycache__ and more — at any depth under \(rootsLabel).")
-                .font(.system(size: 12))
+                .font(Theme.Text.caption)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 460)
@@ -341,11 +346,11 @@ struct DeveloperJunkView: View {
     private var cleanState: some View {
         VStack(spacing: 12) {
             Image(systemName: "checkmark.seal.fill")
-                .font(.system(size: 40)).foregroundStyle(Theme.ok)
+                .font(Theme.Text.display).foregroundStyle(Theme.ok)
             Text("No developer junk found")
-                .font(.system(size: 15, weight: .semibold))
+                .font(Theme.Text.control.weight(.semibold))
             Text("Nothing reclaimable under \(rootsLabel).")
-                .font(.system(size: 12)).foregroundStyle(.secondary)
+                .font(Theme.Text.caption).foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 60)
@@ -374,34 +379,34 @@ private struct DeveloperArtifactRow: View {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 6) {
                         Text(artifact.projectName)
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(Theme.Text.control.weight(.semibold))
                         Text("·").foregroundStyle(.secondary)
                         Text(artifact.displayName)
-                            .font(.system(size: 13))
+                            .font(Theme.Text.body)
                             .foregroundStyle(.secondary)
                         safetyBadge
                     }
                     Text(artifact.reason)
-                        .font(.system(size: 11))
+                        .font(Theme.Text.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                     HStack(spacing: 6) {
                         Image(systemName: "arrow.counterclockwise")
-                            .font(.system(size: 9))
+                            .font(Theme.Text.eyebrow)
                             .foregroundStyle(Theme.accent)
                         Text("Restore: \(artifact.restoreCommand)")
-                            .font(.system(size: 11).monospaced())
+                            .font(Theme.Text.caption.monospaced())
                             .foregroundStyle(Theme.accent)
                     }
                     Text(DeveloperJunkModel.tildify(artifact.url.path))
-                        .font(.system(size: 10).monospaced())
+                        .font(Theme.Text.eyebrow.monospaced())
                         .foregroundStyle(.tertiary)
                         .lineLimit(1)
                         .truncationMode(.middle)
                 }
                 Spacer()
                 Text(formattedDevSize(artifact.size))
-                    .font(.system(size: 14, weight: .semibold).monospacedDigit())
+                    .font(Theme.Text.metric)
             }
             .padding(14)
             .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(.ultraThinMaterial))
@@ -429,7 +434,7 @@ private struct DeveloperArtifactRow: View {
                 .frame(width: 18, height: 18)
             if isSelected {
                 Image(systemName: "checkmark")
-                    .font(.system(size: 10, weight: .heavy))
+                    .font(Theme.Text.eyebrow.weight(.heavy))
                     .foregroundStyle(.white)
             }
         }

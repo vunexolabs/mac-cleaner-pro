@@ -115,8 +115,17 @@ struct SunburstView: View {
 
     private static let maxDepth: Int = 4
 
-    private var layout: SunburstLayout {
-        SunburstLayout.build(focus: focus, maxDepth: Self.maxDepth)
+    /// Built once per focus, not once per render.
+    ///
+    /// This was a computed property read four times in the body, so every body
+    /// evaluation walked the tree four levels deep four times over — and
+    /// `onContinuousHover` re-evaluates the body on every mouse move. Dragging
+    /// the pointer across the wheel rebuilt the whole segment tree hundreds of
+    /// times a second, which is what made the window beachball.
+    @State private var layout = SunburstLayout(segments: [], maxDepth: 4)
+
+    private func rebuildLayout() {
+        layout = SunburstLayout.build(focus: focus, maxDepth: Self.maxDepth)
     }
 
     var body: some View {
@@ -165,6 +174,8 @@ struct SunburstView: View {
             }
             .compositingGroup()
             .animation(.easeOut(duration: 0.25), value: focus.id)
+            .onAppear { rebuildLayout() }
+            .onChange(of: focus.id) { _ in rebuildLayout() }
             // The wheel is a Canvas with a pointer-driven hit overlay, so it is
             // unreachable without a mouse: nothing to focus, nothing to read.
             // Swap in a real control tree for assistive tech — same data, same
@@ -213,19 +224,19 @@ struct SunburstView: View {
                 VStack(spacing: 4) {
                     if canAscend {
                         Image(systemName: "arrow.up.left.and.arrow.down.right")
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(Theme.Text.caption.weight(.semibold))
                             .foregroundStyle(Theme.accent)
                     }
                     Text(focus.name.isEmpty ? "/" : focus.name)
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(Theme.Text.caption.weight(.semibold))
                         .lineLimit(1)
                         .truncationMode(.middle)
                         .padding(.horizontal, 10)
                     Text(byteString(focus.size))
-                        .font(.system(size: 17, weight: .bold).monospacedDigit())
+                        .font(Theme.Text.metric)
                         .foregroundStyle(Theme.brandGradient)
                     Text(canAscend ? "click to go up" : "root")
-                        .font(.system(size: 8, weight: .semibold))
+                        .font(Theme.Text.eyebrow)
                         .tracking(1.0)
                         .textCase(.uppercase)
                         .foregroundStyle(.secondary)
@@ -369,7 +380,7 @@ struct SunburstView: View {
 
         let resolved = context.resolve(
             Text(seg.node.name)
-                .font(.system(size: 10, weight: .semibold))
+                .font(Theme.Text.eyebrow)
                 .foregroundColor(.white)
         )
         let textSize = resolved.measure(in: CGSize(width: 200, height: 30))
@@ -390,7 +401,7 @@ struct SunburstView: View {
             // Subtle text shadow for readability over bright tiles
             layer.draw(
                 Text(seg.node.name)
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(Theme.Text.eyebrow)
                     .foregroundColor(.black.opacity(0.55)),
                 at: CGPoint(x: 0.5, y: 0.5)
             )

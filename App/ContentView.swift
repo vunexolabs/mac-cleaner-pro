@@ -51,16 +51,19 @@ struct ContentView: View {
     var body: some View {
         NavigationSplitView {
             sidebar
-                .navigationSplitViewColumnWidth(min: 220, ideal: 240, max: 280)
+                .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 280)
         } detail: {
             ZStack {
                 BackgroundOrbs()
                 detailContent
             }
-            .toolbar {
-                ToolbarItem(placement: .principal) { toolbarTitle }
-                ToolbarItem(placement: .primaryAction) { ThemeToggle() }
-            }
+            // The canvas ignores the safe area; the content must not. Applying
+            // ignoresSafeArea inside BackgroundOrbs expanded the whole detail
+            // pane under the title bar and shifted the layout with it.
+            .background(Theme.canvas.ignoresSafeArea())
+            // No principal title: macOS 26 draws a glass capsule behind a
+            // principal toolbar item, and it only repeated the large heading
+            // sitting a few points below it.
         }
     }
 
@@ -84,10 +87,12 @@ struct ContentView: View {
         }
     }
 
-    private var toolbarTitle: some View {
-        Text(selection?.title ?? "Mac Cleaner Pro")
-            .font(.system(size: 13, weight: .semibold))
-            .foregroundStyle(.secondary)
+
+    /// Reads the shipped version rather than a literal — the sidebar read
+    /// "v1.0 · indie" while the app was on 1.0.5.
+    private static var versionLine: String {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
+        return "v\(version) · indie"
     }
 
     // MARK: - Sidebar
@@ -99,10 +104,10 @@ struct ContentView: View {
                 LogoMark(size: 30)
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Mac Cleaner Pro")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(Theme.Text.control.weight(.semibold))
                         .tracking(-0.2)
-                    Text("v1.0 · indie")
-                        .font(.system(size: 10, weight: .semibold))
+                    Text(Self.versionLine)
+                        .font(Theme.Text.eyebrow)
                         .foregroundStyle(.secondary)
                         .tracking(0.6)
                         .textCase(.uppercase)
@@ -144,13 +149,19 @@ struct ContentView: View {
             .padding(.horizontal, 8)
             .padding(.vertical, 6)
 
-            // Status pill
+            // Status pill, with the appearance toggle beside it.
+            //
+            // The toggle used to live in the toolbar, where macOS 26 draws its
+            // own glass background behind every item — a persistent ring around
+            // a control that already shows a background on hover. Down here we
+            // own the chrome, so hover is the only background it has.
             HStack(spacing: 8) {
                 PulsingDot(color: Theme.ok, size: 6)
                 Text("All systems operational")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(Theme.Text.caption.weight(.medium))
                     .foregroundStyle(.secondary)
                 Spacer()
+                ThemeToggle()
             }
             .padding(14)
         }
@@ -184,12 +195,12 @@ private struct SidebarRow: View {
         Button(action: onTap) {
             HStack(spacing: 10) {
                 Image(systemName: item.systemImage)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(Theme.Text.rowTitle.weight(.semibold))
                     .foregroundStyle(isSelected ? AnyShapeStyle(Theme.brandGradient)
                                                 : AnyShapeStyle(Color.secondary))
                     .frame(width: 18)
                 Text(item.title)
-                    .font(.system(size: 13, weight: isSelected ? .semibold : .medium))
+                    .font(Theme.Text.rowTitle.weight(isSelected ? .semibold : .medium))
                     .foregroundStyle(isSelected ? .primary : .secondary)
                     .lineLimit(1)
                 Spacer()
@@ -222,31 +233,43 @@ struct BackgroundOrbs: View {
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        let alphaA: Double = scheme == .dark ? 0.20 : 0.10
-        let alphaB: Double = scheme == .dark ? 0.18 : 0.08
+        let alphaA: Double = scheme == .dark ? 0.22 : 0.10
+        let alphaB: Double = scheme == .dark ? 0.20 : 0.08
+
         GeometryReader { geo in
             ZStack {
-                Circle()
-                    .fill(Color(hex: 0x0A84FF, alpha: alphaA))
-                    .frame(width: 480, height: 480)
-                    .blur(radius: 120)
-                    .offset(x: -geo.size.width * 0.25, y: -geo.size.height * 0.30)
-                Circle()
-                    .fill(Color(hex: 0x7C5CFF, alpha: alphaB))
-                    .frame(width: 560, height: 560)
-                    .blur(radius: 140)
-                    .offset(x: geo.size.width * 0.30, y: geo.size.height * 0.30)
+                orb(Color(hex: 0x0A84FF, alpha: alphaA), diameter: geo.size.width * 0.9)
+                    .offset(x: -geo.size.width * 0.28, y: -geo.size.height * 0.34)
+                orb(Color(hex: 0x7C5CFF, alpha: alphaB), diameter: geo.size.width * 1.0)
+                    .offset(x: geo.size.width * 0.32, y: geo.size.height * 0.34)
             }
-            // Rasterize the heavy blurs into one cached Metal layer so they
-            // aren't recomputed every time the detail content swaps on a tab
-            // switch. These orbs are purely decorative (no material/vibrancy),
-            // so flattening them is safe.
-            .drawingGroup()
             .accessibilityHidden(true)
         }
         .allowsHitTesting(false)
     }
+
+    /// A soft glow drawn as a radial gradient rather than a blurred circle.
+    ///
+    /// The previous version blurred a `Circle` by 120–140pt inside a
+    /// `.drawingGroup()`. That rasterises into a buffer the size of the view,
+    /// so the blur — which bleeds well past the circle's own bounds — was
+    /// hard-clipped at the buffer edge and drew a visible rectangle across
+    /// every screen. It showed up twice as strongly in dark mode, where the
+    /// alpha is doubled.
+    ///
+    /// A gradient has no bleed to clip, needs no offscreen buffer, and costs
+    /// less than the blur it replaces.
+    private func orb(_ color: Color, diameter: CGFloat) -> some View {
+        RadialGradient(
+            gradient: Gradient(colors: [color, color.opacity(0), .clear]),
+            center: .center,
+            startRadius: 0,
+            endRadius: diameter / 2
+        )
+        .frame(width: diameter, height: diameter)
+    }
 }
+
 
 #Preview {
     ContentView()

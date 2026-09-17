@@ -60,6 +60,43 @@ enum Theme {
         dark:  Color.white.opacity(0.04)
     )
 
+    // MARK: - Surfaces
+
+    /// The window's base colour behind everything else.
+    ///
+    /// Dark mode is deliberately *mild* — #17171A rather than black. Pure black
+    /// makes translucent cards read as flat grey patches and exaggerates every
+    /// edge; a soft near-black lets the elevated surfaces below actually look
+    /// elevated.
+    static let canvas = Color(
+        light: Color(hex: 0xF7F7FA),
+        dark:  Color(hex: 0x17171A)
+    )
+
+    /// Card and panel fill. Layered above `canvas`.
+    static let surface = Color(
+        light: Color.white.opacity(0.72),
+        dark:  Color(hex: 0x232328).opacity(0.88)
+    )
+
+    /// A second level of elevation — popovers, selected rows, the menu bar panel.
+    static let surfaceElevated = Color(
+        light: Color.white.opacity(0.92),
+        dark:  Color(hex: 0x2C2C33).opacity(0.94)
+    )
+
+    /// Body text. `.primary` resolves too harsh on the mild dark canvas.
+    static let textPrimary = Color(
+        light: Color(hex: 0x1A1A1F),
+        dark:  Color(hex: 0xECECF0)
+    )
+
+    /// Supporting text — deliberately above the 4.5:1 line on both canvases.
+    static let textSecondary = Color(
+        light: Color(hex: 0x5A5A66),
+        dark:  Color(hex: 0xA0A0AC)
+    )
+
     // MARK: - Radii
 
     static let rSm: CGFloat = 8

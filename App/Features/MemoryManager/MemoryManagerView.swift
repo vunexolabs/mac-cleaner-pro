@@ -224,11 +224,11 @@ struct MemoryManagerView: View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
                 Text("Memory Usage")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(Theme.Text.control.weight(.semibold))
                     .foregroundStyle(.secondary)
                 Spacer()
                 Text(usedTotalText)
-                    .font(.system(size: 13, weight: .semibold).monospacedDigit())
+                    .font(Theme.Text.metric)
                     .foregroundStyle(.secondary)
             }
 
@@ -243,21 +243,21 @@ struct MemoryManagerView: View {
                 LegendDot(color: .secondary,    label: "Free", value: bytes(model.stats.freeBytes))
                 Spacer()
             }
-            .font(.system(size: 11, weight: .medium))
+            .font(Theme.Text.caption.weight(.medium))
 
             if model.stats.swapTotalBytes > 0 || model.stats.swapUsedBytes > 0 {
                 let swapFrac = model.stats.totalBytes > 0 ? Double(model.stats.swapUsedBytes) / Double(model.stats.totalBytes) : 0
                 let isHigh = swapFrac > 0.25
                 HStack(spacing: 6) {
                     Image(systemName: "internaldrive")
-                        .font(.system(size: 11))
+                        .font(Theme.Text.caption)
                         .foregroundStyle(isHigh ? Theme.warn : .secondary)
                     Text("Swap: \(bytes(model.stats.swapUsedBytes)) used")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(Theme.Text.caption.weight(.medium))
                         .foregroundStyle(isHigh ? Theme.warn : .secondary)
                     if isHigh {
                         Text("(emergency mode active)")
-                            .font(.system(size: 10, weight: .medium))
+                            .font(Theme.Text.eyebrow.weight(.medium))
                             .foregroundStyle(Theme.warn)
                     }
                 }
@@ -321,9 +321,9 @@ struct MemoryManagerView: View {
                 Toggle(isOn: $model.autoMode) {
                     HStack(spacing: 6) {
                         Image(systemName: "bolt.badge.automatic")
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(Theme.Text.caption.weight(.semibold))
                         Text("Auto-free on critical pressure")
-                            .font(.system(size: 12, weight: .medium))
+                            .font(Theme.Text.caption.weight(.medium))
                     }
                 }
                 .toggleStyle(.switch)
@@ -340,7 +340,7 @@ struct MemoryManagerView: View {
                             .foregroundStyle(Theme.ok)
                     }
                     Text(msg)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(Theme.Text.caption.weight(.medium))
                         .foregroundStyle(.secondary)
                 }
                 .transition(.opacity)
@@ -356,13 +356,13 @@ struct MemoryManagerView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("Top memory consumers")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(Theme.Text.control.weight(.semibold))
                 Text("(updates every 2s)")
-                    .font(.system(size: 11))
+                    .font(Theme.Text.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
                 Text(processCountLabel)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(Theme.Text.caption.weight(.medium))
                     .foregroundStyle(.secondary)
             }
 
@@ -374,7 +374,7 @@ struct MemoryManagerView: View {
                 Text("% RAM").frame(width: 70, alignment: .trailing)
                 Text("").frame(width: 60)
             }
-            .font(.system(size: 10, weight: .semibold))
+            .font(Theme.Text.eyebrow)
             .tracking(0.8)
             .textCase(.uppercase)
             .foregroundStyle(.secondary)
@@ -503,7 +503,7 @@ private struct PressureBadge: View {
         }()
         return HStack(spacing: 6) {
             Text("Pressure")
-                .font(.system(size: 10, weight: .semibold))
+                .font(Theme.Text.eyebrow)
                 .tracking(1.2)
                 .textCase(.uppercase)
                 .foregroundStyle(.secondary)
@@ -530,7 +530,7 @@ private struct ProcessRow: View {
                         .toggleStyle(.checkbox)
                 } else {
                     Image(systemName: "lock")
-                        .font(.system(size: 10))
+                        .font(Theme.Text.eyebrow)
                         .foregroundStyle(.secondary)
                         .help("System-owned process — cannot quit from here.")
                 }
@@ -541,23 +541,23 @@ private struct ProcessRow: View {
                 AppIconView(path: entry.executablePath)
                     .frame(width: 18, height: 18)
                 Text(entry.name)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(Theme.Text.caption.weight(.medium))
                     .lineLimit(1)
                     .truncationMode(.middle)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
             Text(formatBytes(entry.residentBytes))
-                .font(.system(size: 12, weight: .semibold).monospacedDigit())
+                .font(Theme.Text.metric)
                 .frame(width: 110, alignment: .trailing)
 
             Text(percentText)
-                .font(.system(size: 11).monospacedDigit())
+                .font(Theme.Text.metric)
                 .foregroundStyle(.secondary)
                 .frame(width: 70, alignment: .trailing)
 
             Text("PID \(entry.pid)")
-                .font(.system(size: 10).monospacedDigit())
+                .font(Theme.Text.metric)
                 .foregroundStyle(.secondary)
                 .frame(width: 60, alignment: .trailing)
         }

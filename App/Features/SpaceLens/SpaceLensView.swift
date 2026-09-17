@@ -4,6 +4,11 @@ import Core
 
 @MainActor
 final class SpaceLensModel: ObservableObject {
+    /// Shared so a scan survives the user switching tabs. The detail pane
+    /// swaps views on selection, which destroys a @StateObject and everything
+    /// it was holding — including a Space Lens walk that took minutes.
+    static let shared = SpaceLensModel()
+
     @Published var root: URL = URL(fileURLWithPath: NSHomeDirectory())
     @Published var tree: SpaceLensNode?
     @Published var path: [SpaceLensNode] = []      // breadcrumb stack from root → current focus
@@ -158,10 +163,17 @@ enum SpaceLensChart: String, CaseIterable, Identifiable {
 }
 
 struct SpaceLensView: View {
-    @StateObject private var model = SpaceLensModel()
+    @ObservedObject private var model = SpaceLensModel.shared
     @AppStorage("MCP-SpaceLens-Chart") private var chart: SpaceLensChart = .sunburst
 
     var body: some View {
+        // The scroll container is load-bearing, not decoration. Without it this
+        // page rendered above the title bar: the heading collided with the
+        // window title and the sidebar's brand lockup was pushed off the top.
+        // Every page that renders correctly has one; Space Lens was the only
+        // one that did not. Removing maxHeight, the width-class dependency and
+        // the unified toolbar style each failed to fix it; this is what did.
+        ScrollView {
         VStack(alignment: .leading, spacing: 18) {
             header
             controls
@@ -179,7 +191,8 @@ struct SpaceLensView: View {
         }
         .padding(.horizontal, 28)
         .padding(.vertical, 24)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        }
     }
 
     // MARK: Header
@@ -199,7 +212,7 @@ struct SpaceLensView: View {
             Image(systemName: "folder.fill")
                 .foregroundStyle(Theme.brandGradient)
             Text(SpaceLensModel.tildify(model.root.path))
-                .font(.system(size: 13, design: .monospaced))
+                .font(Theme.Text.mono)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .truncationMode(.middle)
@@ -236,15 +249,15 @@ struct SpaceLensView: View {
                         )
                         .frame(width: 52, height: 52)
                     Image(systemName: "rectangle.grid.3x2")
-                        .font(.system(size: 22, weight: .semibold))
+                        .font(Theme.Text.title)
                         .foregroundStyle(Theme.accent)
                 }
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Visualize every byte on your disk")
-                        .font(.system(size: 22, weight: .semibold))
+                        .font(Theme.Text.title)
                         .tracking(-0.3)
                     Text("A live treemap or sunburst of any folder — click to drill in, right-click to clean.")
-                        .font(.system(size: 13))
+                        .font(Theme.Text.body)
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -273,14 +286,14 @@ struct SpaceLensView: View {
             }
             VStack(spacing: 4) {
                 Text("Mapping the filesystem…")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(Theme.Text.control.weight(.semibold))
                 Text(byteString(model.bytesScanned))
-                    .font(.system(size: 22, weight: .bold).monospacedDigit())
+                    .font(Theme.Text.metricLarge)
                     .foregroundStyle(Theme.brandGradient)
                     .contentTransition(.numericText())
                     .animation(.easeOut(duration: 0.18), value: model.bytesScanned)
                 Text(model.currentScanPath.isEmpty ? "warming up…" : model.currentScanPath)
-                    .font(.system(size: 11).monospaced())
+                    .font(Theme.Text.caption.monospaced())
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
@@ -301,7 +314,7 @@ struct SpaceLensView: View {
                 Spacer(minLength: 12)
                 chartPicker
             }
-            HStack(alignment: .top, spacing: 14) {
+            HStack(alignment: .top, spacing: Layout.s3) {
                 chartPanel
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 rightSidebar
@@ -392,13 +405,13 @@ struct SpaceLensView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text("ITEMS")
-                    .font(.system(size: 9, weight: .bold))
+                    .font(Theme.Text.eyebrow.weight(.bold))
                     .tracking(1.6)
                     .foregroundStyle(.secondary)
                 Spacer()
                 if let cur = model.current {
                     Text("\(cur.children.count)")
-                        .font(.system(size: 11, weight: .semibold).monospacedDigit())
+                        .font(Theme.Text.metric)
                         .foregroundStyle(.secondary)
                 }
             }
@@ -434,7 +447,7 @@ struct SpaceLensView: View {
         return VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text(model.selected != nil ? "SELECTED" : "HOVER")
-                    .font(.system(size: 9, weight: .bold))
+                    .font(Theme.Text.eyebrow.weight(.bold))
                     .tracking(1.6)
                     .foregroundStyle(.secondary)
                 Spacer()
@@ -449,16 +462,16 @@ struct SpaceLensView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                     HStack(spacing: 12) {
                         Image(systemName: n.isDirectory ? "folder.fill" : "doc.fill")
-                            .font(.system(size: 22, weight: .semibold))
+                            .font(Theme.Text.title)
                             .foregroundStyle(Theme.brandGradient)
                             .padding(.leading, 14)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(n.name)
-                                .font(.system(size: 13, weight: .semibold))
+                                .font(Theme.Text.rowTitle.weight(.semibold))
                                 .lineLimit(1)
                                 .truncationMode(.middle)
                             Text(byteString(n.size))
-                                .font(.system(size: 16, weight: .bold).monospacedDigit())
+                                .font(Theme.Text.metric)
                                 .foregroundStyle(Theme.accent)
                         }
                         Spacer(minLength: 0)
@@ -466,7 +479,7 @@ struct SpaceLensView: View {
                 }
 
                 Text(SpaceLensModel.tildify(n.url.path))
-                    .font(.system(size: 10).monospaced())
+                    .font(Theme.Text.eyebrow.monospaced())
                     .foregroundStyle(.secondary)
                     .lineLimit(3)
                     .truncationMode(.middle)
@@ -476,10 +489,10 @@ struct SpaceLensView: View {
                     let pct = Double(n.size) / Double(cur.size) * 100
                     HStack(spacing: 6) {
                         Text(String(format: "%.1f%%", pct))
-                            .font(.system(size: 11, weight: .semibold).monospacedDigit())
+                            .font(Theme.Text.metric)
                             .foregroundStyle(Theme.accent)
                         Text("of \(cur.name)")
-                            .font(.system(size: 11))
+                            .font(Theme.Text.caption)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                     }
@@ -491,14 +504,14 @@ struct SpaceLensView: View {
                             if let s = model.selected { model.revealInFinder(s) }
                         } label: {
                             Label("Reveal", systemImage: "magnifyingglass")
-                                .font(.system(size: 12, weight: .medium))
+                                .font(Theme.Text.caption.weight(.medium))
                         }
                         .buttonStyle(SoftButtonStyle())
                         Button {
                             model.trashSelected()
                         } label: {
                             Label("Trash", systemImage: "trash")
-                                .font(.system(size: 12, weight: .medium))
+                                .font(Theme.Text.caption.weight(.medium))
                         }
                         .buttonStyle(GradientButtonStyle())
                     }
@@ -510,7 +523,7 @@ struct SpaceLensView: View {
                                 Image(systemName: "arrow.down.right.square")
                                 Text("Drill into \(n.name)")
                             }
-                            .font(.system(size: 12, weight: .medium))
+                            .font(Theme.Text.caption.weight(.medium))
                             .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(SoftButtonStyle())
@@ -538,7 +551,7 @@ struct SpaceLensView: View {
                             action: { model.navigate(toIndex: -1) })
             ForEach(Array(model.path.enumerated()), id: \.offset) { idx, node in
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 9, weight: .semibold))
+                    .font(Theme.Text.eyebrow)
                     .foregroundStyle(.secondary.opacity(0.6))
                 BreadcrumbCrumb(label: node.name,
                                 icon: nil,
@@ -548,7 +561,7 @@ struct SpaceLensView: View {
             Spacer()
             if let cur = model.current {
                 Text(byteString(cur.size))
-                    .font(.system(size: 12, weight: .semibold).monospacedDigit())
+                    .font(Theme.Text.metric)
                     .foregroundStyle(.secondary)
             }
         }
@@ -557,10 +570,10 @@ struct SpaceLensView: View {
     private var undoBanner: some View {
         HStack(spacing: 12) {
             Image(systemName: "arrow.uturn.backward.circle.fill")
-                .font(.system(size: 18))
+                .font(Theme.Text.sectionTitle)
                 .foregroundStyle(Theme.ok)
             Text(model.actionMessage ?? "Files staged in trash")
-                .font(.system(size: 13, weight: .medium))
+                .font(Theme.Text.rowTitle)
             Spacer()
             Button("Undo") { model.undoLast() }
                 .buttonStyle(SoftButtonStyle())
@@ -605,27 +618,26 @@ private struct ChildListRow: View {
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(child.name)
-                        .font(.system(size: 12.5,
-                                      weight: isSelected ? .semibold : .medium))
+                        .font(Theme.Text.rowTitle.weight(isSelected ? .semibold : .medium))
                         .lineLimit(1)
                         .truncationMode(.middle)
                     Text(child.isDirectory
                          ? "\(child.children.count) item\(child.children.count == 1 ? "" : "s")"
                          : "file")
-                        .font(.system(size: 10))
+                        .font(Theme.Text.eyebrow)
                         .foregroundStyle(.secondary)
                 }
 
                 Spacer(minLength: 6)
 
                 Text(byteString(child.size))
-                    .font(.system(size: 11, weight: .semibold).monospacedDigit())
+                    .font(Theme.Text.metric)
                     .foregroundStyle(isSelected ? Color.primary : Color.secondary)
 
                 if child.isDirectory && !child.children.isEmpty {
                     Button(action: onDrill) {
                         Image(systemName: "chevron.right")
-                            .font(.system(size: 10, weight: .semibold))
+                            .font(Theme.Text.eyebrow)
                             .foregroundStyle(.secondary)
                     }
                     .buttonStyle(.plain)
@@ -683,10 +695,10 @@ private struct BreadcrumbCrumb: View {
             HStack(spacing: 5) {
                 if let icon {
                     Image(systemName: icon)
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(Theme.Text.eyebrow)
                 }
                 Text(label)
-                    .font(.system(size: 12, weight: isLast ? .semibold : .medium))
+                    .font(Theme.Text.caption.weight(isLast ? .semibold : .medium))
                     .lineLimit(1)
             }
             .foregroundStyle(isLast ? Color.primary : Color.secondary)
@@ -719,14 +731,14 @@ private struct QuickStartTile: View {
                         .fill(Theme.accentSoft)
                         .frame(width: 32, height: 32)
                     Image(systemName: icon)
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(Theme.Text.control.weight(.semibold))
                         .foregroundStyle(Theme.accent)
                 }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(label)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(Theme.Text.rowTitle.weight(.semibold))
                     Text(subtitle)
-                        .font(.system(size: 11).monospaced())
+                        .font(Theme.Text.caption.monospaced())
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .truncationMode(.middle)

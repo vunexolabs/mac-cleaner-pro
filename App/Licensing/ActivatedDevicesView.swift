@@ -15,7 +15,7 @@ struct ActivatedDevicesView: View {
             // Header
             VStack(spacing: 8) {
                 Image(systemName: "laptopcomputer.and.iphone")
-                    .font(.system(size: 48))
+                    .font(Theme.Text.display)
                     .foregroundStyle(.blue.gradient)
 
                 Text("Activated Devices")
@@ -59,7 +59,7 @@ struct ActivatedDevicesView: View {
                         if devices.isEmpty {
                             VStack(spacing: 12) {
                                 Image(systemName: "laptopcomputer")
-                                    .font(.system(size: 48))
+                                    .font(Theme.Text.display)
                                     .foregroundStyle(.secondary)
 
                                 Text("No devices activated")
@@ -134,7 +134,7 @@ struct DeviceRow: View {
         HStack(spacing: 16) {
             // Device icon
             Image(systemName: isCurrentDevice ? "laptopcomputer" : "desktopcomputer")
-                .font(.system(size: 32))
+                .font(Theme.Text.display)
                 .foregroundStyle(isCurrentDevice ? .blue : .secondary)
                 .frame(width: 48)
 

@@ -4,7 +4,7 @@ import SwiftUI
 /// "Reclaimable: 6.36 GB" counter so the number rolls in instead of popping.
 struct AnimatedByteCount: View, Animatable {
     var value: Double
-    var font: Font = .system(size: 22, weight: .semibold).monospacedDigit()
+    var font: Font = Theme.Text.metricLarge
     var color: Color = .primary
 
     var animatableData: Double {

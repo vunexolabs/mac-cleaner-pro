@@ -79,11 +79,11 @@ struct TreemapView: View {
                 if width >= Self.minLabelWidth && height >= Self.minLabelHeight {
                     VStack(alignment: .leading, spacing: 1) {
                         Text(node.name)
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(Theme.Text.caption.weight(.semibold))
                             .lineLimit(1)
                             .truncationMode(.middle)
                         Text(byteString(node.size))
-                            .font(.system(size: 9.5, weight: .medium).monospacedDigit())
+                            .font(Theme.Text.metric)
                             .opacity(0.75)
                     }
                     // The tile colours are fixed pastels, so dark text reads on
@@ -115,7 +115,7 @@ struct TreemapView: View {
     private var ascendButton: some View {
         Button(action: onAscend) {
             Label("Up", systemImage: "arrow.up.left")
-                .font(.system(size: 11, weight: .semibold))
+                .font(Theme.Text.caption.weight(.semibold))
                 .padding(.horizontal, 9)
                 .padding(.vertical, 5)
                 .background(

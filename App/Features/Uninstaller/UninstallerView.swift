@@ -4,6 +4,10 @@ import Core
 
 @MainActor
 final class UninstallerModel: ObservableObject {
+    /// Shared so a scan survives switching tabs — the detail pane swaps views
+    /// on selection, which destroys a @StateObject and everything it holds.
+    static let shared = UninstallerModel()
+
     @Published var apps: [AppRecord] = []
     @Published var selectedApp: AppRecord?
     @Published var leftovers: [Leftover] = []
@@ -123,7 +127,7 @@ final class UninstallerModel: ObservableObject {
 }
 
 struct UninstallerView: View {
-    @StateObject private var model = UninstallerModel()
+    @ObservedObject private var model = UninstallerModel.shared
     @StateObject private var gate = LicenseGate.shared
 
     var body: some View {
@@ -141,7 +145,7 @@ struct UninstallerView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Installed Apps")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(Theme.Text.control.weight(.semibold))
                     Text("\(model.apps.count) found · sorted by size")
                         .font(.caption).foregroundStyle(.secondary)
                 }
@@ -150,7 +154,7 @@ struct UninstallerView: View {
                     model.loadApps()
                 } label: {
                     Image(systemName: "arrow.clockwise")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(Theme.Text.caption.weight(.semibold))
                 }
                 .buttonStyle(SoftButtonStyle())
                 .keyboardShortcut("r", modifiers: .command)
@@ -222,15 +226,15 @@ struct UninstallerView: View {
                         )
                         .frame(width: 52, height: 52)
                     Image(systemName: "shippingbox")
-                        .font(.system(size: 22, weight: .semibold))
+                        .font(Theme.Text.title)
                         .foregroundStyle(Theme.accent)
                 }
                 VStack(alignment: .leading, spacing: 4) {
                     Text("App Uninstaller")
-                        .font(.system(size: 22, weight: .semibold))
+                        .font(Theme.Text.title)
                         .tracking(-0.3)
                     Text("Remove apps and every file they leave behind.")
-                        .font(.system(size: 13))
+                        .font(Theme.Text.body)
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -247,13 +251,13 @@ struct UninstallerView: View {
             // Hint card
             HStack(spacing: 12) {
                 Image(systemName: "arrow.left")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(Theme.Text.control.weight(.semibold))
                     .foregroundStyle(Theme.accent)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Pick any app to begin")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(Theme.Text.rowTitle.weight(.semibold))
                     Text("We scan 12 user-space locations for leftover files.")
-                        .font(.system(size: 11))
+                        .font(Theme.Text.caption)
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -281,10 +285,10 @@ struct UninstallerView: View {
                 .shadow(color: .black.opacity(0.3), radius: 8, y: 4)
             VStack(alignment: .leading, spacing: 5) {
                 Text(app.name)
-                    .font(.system(size: 22, weight: .semibold))
+                    .font(Theme.Text.title)
                     .tracking(-0.4)
                 Text(app.bundleID)
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(Theme.Text.mono)
                     .foregroundStyle(.secondary)
                 HStack(spacing: 10) {
                     if let v = app.version {
@@ -351,13 +355,13 @@ struct UninstallerView: View {
         HStack(spacing: 14) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Will reclaim")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(Theme.Text.caption.weight(.semibold))
                     .tracking(1.0)
                     .textCase(.uppercase)
                     .foregroundStyle(.secondary)
                 AnimatedByteCount(
                     value: Double(model.totalSelectedBytes),
-                    font: .system(size: 22, weight: .semibold).monospacedDigit()
+                    font: Theme.Text.metricLarge
                 )
                 .animation(.easeInOut(duration: 0.4), value: model.totalSelectedBytes)
             }
@@ -380,10 +384,10 @@ struct UninstallerView: View {
     private var undoBanner: some View {
         HStack(spacing: 12) {
             Image(systemName: "arrow.uturn.backward.circle.fill")
-                .font(.system(size: 18))
+                .font(Theme.Text.sectionTitle)
                 .foregroundStyle(Theme.ok)
             Text(model.actionMessage ?? "Uninstalled — staged in trash")
-                .font(.system(size: 13, weight: .medium))
+                .font(Theme.Text.rowTitle)
             Spacer()
             Button("Undo") { model.undoLast() }
                 .keyboardShortcut("z", modifiers: .command)
@@ -415,11 +419,11 @@ private struct LeftoverLocationTile: View {
                     .fill(Theme.accentSoft)
                     .frame(width: 28, height: 28)
                 Image(systemName: icon)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(Theme.Text.caption.weight(.semibold))
                     .foregroundStyle(Theme.accent)
             }
             Text(label)
-                .font(.system(size: 12, weight: .medium))
+                .font(Theme.Text.caption.weight(.medium))
                 .lineLimit(1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -444,7 +448,7 @@ private struct AppRow: View {
                 .resizable().frame(width: 28, height: 28)
             VStack(alignment: .leading, spacing: 1) {
                 Text(app.name)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(Theme.Text.rowTitle)
                     .lineLimit(1)
                 Text(byteString(app.size))
                     .font(.caption2.monospacedDigit())
@@ -489,7 +493,7 @@ private struct LeftoverRow: View {
                         .frame(width: 16, height: 16)
                     if isChecked {
                         Image(systemName: "checkmark")
-                            .font(.system(size: 9, weight: .heavy))
+                            .font(Theme.Text.eyebrow.weight(.heavy))
                             .foregroundStyle(.white)
                     }
                 }
@@ -497,16 +501,16 @@ private struct LeftoverRow: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(leftover.url.lastPathComponent)
-                        .font(.system(size: 13, weight: .medium))
+                        .font(Theme.Text.rowTitle)
                         .lineLimit(1)
                     Text(leftover.url.deletingLastPathComponent().path)
-                        .font(.system(size: 10, design: .monospaced))
+                        .font(Theme.Text.mono)
                         .foregroundStyle(.secondary)
                         .lineLimit(1).truncationMode(.middle)
                 }
                 Spacer()
                 Text(byteString(leftover.size))
-                    .font(.system(size: 12, weight: .medium).monospacedDigit())
+                    .font(Theme.Text.metric)
                     .foregroundStyle(leftover.requiresHelper ? .secondary : .primary)
             }
             .padding(.horizontal, 12)

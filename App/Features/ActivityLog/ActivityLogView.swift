@@ -134,25 +134,25 @@ struct ActivityLogView: View {
                     .frame(width: 56, height: 56)
                     .shadow(color: Theme.accentRing, radius: 14, y: 6)
                 Image(systemName: "internaldrive")
-                    .font(.system(size: 22, weight: .semibold))
+                    .font(Theme.Text.title)
                     .foregroundStyle(.white)
             }
             VStack(alignment: .leading, spacing: 4) {
                 Text("Lifetime reclaimed")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(Theme.Text.caption.weight(.semibold))
                     .tracking(1.2)
                     .textCase(.uppercase)
                     .foregroundStyle(.secondary)
                 AnimatedByteCount(
                     value: Double(model.totalReclaimed),
-                    font: .system(size: 30, weight: .semibold).monospacedDigit()
+                    font: Theme.Text.metricLarge
                 )
                 .animation(.easeInOut(duration: 0.5), value: model.totalReclaimed)
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 4) {
                 Text("\(model.entries.count) entries")
-                    .font(.system(size: 13, weight: .medium))
+                    .font(Theme.Text.rowTitle)
                 Text("All on your Mac, nothing uploaded.")
                     .font(.caption).foregroundStyle(.secondary)
             }
@@ -166,7 +166,7 @@ struct ActivityLogView: View {
             Image(systemName: "exclamationmark.triangle.fill")
                 .foregroundStyle(Theme.warn)
             Text(message)
-                .font(.system(size: 12))
+                .font(Theme.Text.caption)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer()
             Button("Dismiss") { model.undoError = nil }
@@ -189,15 +189,15 @@ struct ActivityLogView: View {
                         )
                         .frame(width: 52, height: 52)
                     Image(systemName: "clock.arrow.circlepath")
-                        .font(.system(size: 22, weight: .semibold))
+                        .font(Theme.Text.title)
                         .foregroundStyle(Theme.accent)
                 }
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Nothing logged yet")
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(Theme.Text.sectionTitle)
                         .tracking(-0.2)
                     Text("Every clean, undo, and empty will appear here — fully on-device.")
-                        .font(.system(size: 13))
+                        .font(Theme.Text.body)
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -231,12 +231,12 @@ private struct EntryRow: View {
                     .fill(color.opacity(0.14))
                     .frame(width: 34, height: 34)
                 Image(systemName: icon)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(Theme.Text.control.weight(.semibold))
                     .foregroundStyle(color)
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(headline)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(Theme.Text.rowTitle)
                 HStack(spacing: 6) {
                     Text(entry.timestamp.formatted(date: .abbreviated, time: .standard))
                     if let note = entry.note {
@@ -253,7 +253,7 @@ private struct EntryRow: View {
                         ProgressView().controlSize(.small)
                     } else {
                         Label("Undo", systemImage: "arrow.uturn.backward")
-                            .font(.system(size: 12, weight: .medium))
+                            .font(Theme.Text.caption.weight(.medium))
                     }
                 }
                 .buttonStyle(SoftButtonStyle())
@@ -262,7 +262,7 @@ private struct EntryRow: View {
                 .accessibilityLabel("Undo \(headline)")
             }
             Text(byteString(entry.bytes))
-                .font(.system(size: 13, weight: .semibold).monospacedDigit())
+                .font(Theme.Text.metric)
                 .foregroundStyle(entry.kind == .undo ? .secondary : .primary)
         }
         .padding(.horizontal, 14)
@@ -336,14 +336,14 @@ private struct EmptyExampleRow: View {
                     .fill(color.opacity(0.14))
                     .frame(width: 28, height: 28)
                 Image(systemName: icon)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(Theme.Text.caption.weight(.semibold))
                     .foregroundStyle(color)
             }
             Text(label)
-                .font(.system(size: 12))
+                .font(Theme.Text.caption)
             Spacer()
             Text(weight)
-                .font(.system(size: 12).monospacedDigit())
+                .font(Theme.Text.metric)
                 .foregroundStyle(.secondary)
         }
         .padding(.horizontal, 12)

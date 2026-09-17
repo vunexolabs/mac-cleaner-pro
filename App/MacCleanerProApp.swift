@@ -8,14 +8,21 @@ struct MacCleanerProApp: App {
     @StateObject private var theme = ThemeManager.shared
 
     var body: some Scene {
-        WindowGroup {
+        WindowGroup(id: "main") {
             ContentView()
-                .frame(minWidth: 980, minHeight: 640)
+                // 980x640 meant the window could not be made small enough to
+                // sit beside anything else on a 13" display. The layouts now
+                // reflow, so the floor is what the content genuinely needs.
+                .frame(minWidth: 720, minHeight: 560)
                 .task {
                     // Re-hydrate undo tokens written by previous launches, then
                     // drop anything past the retention window. Without the load,
                     // staged files from an earlier session are stranded in the
                     // Trash with no way to restore them from the app.
+                    // The stored preference has to reach Core before the
+                    // first clean, not just when Settings happens to be opened.
+                    let permanent = UserDefaults.standard.bool(forKey: "MacCleanerPro.permanentDelete")
+                    await DeletionService.shared.setMode(permanent ? .permanent : .trash)
                     await DeletionService.shared.loadPersistedTokens()
                     await DeletionService.shared.sweepExpiredTokens()
                 }

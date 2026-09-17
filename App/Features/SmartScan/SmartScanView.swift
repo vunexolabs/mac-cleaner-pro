@@ -3,6 +3,10 @@ import Core
 
 @MainActor
 final class SmartScanModel: ObservableObject {
+    /// Shared so a scan survives switching tabs — the detail pane swaps views
+    /// on selection, which destroys a @StateObject and everything it holds.
+    static let shared = SmartScanModel()
+
     @Published var results: [RuleScanResult] = []
     @Published var selected: Set<String> = []     // ruleIDs the user has checked
     @Published var isScanning = false
@@ -183,7 +187,11 @@ final class SmartScanModel: ObservableObject {
 
     private func loadBundledPack() -> RulePack? {
         do {
-            return try RulePackLoader.loadBundled()
+            let pack = try RulePackLoader.loadBundled()
+            // Clear any earlier failure: without this the red banner outlived
+            // the problem and sat above a perfectly good set of results.
+            loadError = nil
+            return pack
         } catch RulePackLoader.LoadError.bundledResourceMissing {
             loadError = "Bundled rule pack missing"
             return nil
@@ -195,13 +203,16 @@ final class SmartScanModel: ObservableObject {
 }
 
 struct SmartScanView: View {
-    @StateObject private var model = SmartScanModel()
+    @ObservedObject private var model = SmartScanModel.shared
     @StateObject private var gate = LicenseGate.shared
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 header
+                // Say what the scan cannot see, rather than reporting a
+                // smaller number and leaving the user to wonder.
+                PermissionNotice(permission: .fullDiskAccess, feature: "Smart Scan")
                 if let err = model.loadError {
                     Text(err)
                         .font(.callout)
@@ -286,15 +297,15 @@ struct SmartScanView: View {
                         )
                         .frame(width: 52, height: 52)
                     Image(systemName: "sparkles")
-                        .font(.system(size: 22, weight: .semibold))
+                        .font(Theme.Text.title)
                         .foregroundStyle(Theme.accent)
                 }
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Smart Scan")
-                        .font(.system(size: 22, weight: .semibold))
+                        .font(Theme.Text.title)
                         .tracking(-0.3)
                     Text("Break down what's hiding in System Data — safely.")
-                        .font(.system(size: 13))
+                        .font(Theme.Text.body)
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -354,10 +365,10 @@ struct SmartScanView: View {
     private func trustItem(icon: String, text: String) -> some View {
         HStack(spacing: 5) {
             Image(systemName: icon)
-                .font(.system(size: 10))
+                .font(Theme.Text.eyebrow)
             Text(text)
         }
-        .font(.system(size: 11, weight: .medium))
+        .font(Theme.Text.caption.weight(.medium))
         .foregroundStyle(.secondary)
     }
 
@@ -372,7 +383,7 @@ struct SmartScanView: View {
             ForEach(groupedByCategory(), id: \.0) { category, rules in
                 VStack(alignment: .leading, spacing: 10) {
                     Text(category.displayName)
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(Theme.Text.caption.weight(.semibold))
                         .tracking(1.4)
                         .textCase(.uppercase)
                         .foregroundStyle(.secondary)
@@ -396,13 +407,13 @@ struct SmartScanView: View {
         HStack(spacing: 14) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Reclaimable")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(Theme.Text.caption.weight(.semibold))
                     .tracking(1.2)
                     .textCase(.uppercase)
                     .foregroundStyle(.secondary)
                 AnimatedByteCount(
                     value: Double(model.totalReclaimable),
-                    font: .system(size: 26, weight: .semibold).monospacedDigit()
+                    font: Theme.Text.metricLarge
                 )
                 .animation(.easeInOut(duration: 0.5), value: model.totalReclaimable)
             }
@@ -445,11 +456,11 @@ struct SmartScanView: View {
     private var undoBanner: some View {
         HStack(spacing: 12) {
             Image(systemName: "arrow.uturn.backward.circle.fill")
-                .font(.system(size: 18))
+                .font(Theme.Text.sectionTitle)
                 .foregroundStyle(Theme.ok)
             VStack(alignment: .leading, spacing: 2) {
                 Text(model.actionMessage ?? "Files staged in trash")
-                    .font(.system(size: 13, weight: .medium))
+                    .font(Theme.Text.rowTitle)
                 Text("Undo to restore, or dismiss to permanently delete.")
                     .font(.caption).foregroundStyle(.secondary)
             }
@@ -507,7 +518,7 @@ private struct RuleRow: View {
                         .frame(width: 18, height: 18)
                     if isSelected {
                         Image(systemName: "checkmark")
-                            .font(.system(size: 10, weight: .heavy))
+                            .font(Theme.Text.eyebrow.weight(.heavy))
                             .foregroundStyle(.white)
                     }
                 }
@@ -516,7 +527,7 @@ private struct RuleRow: View {
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 6) {
                         Text(result.displayName)
-                            .font(.system(size: 14, weight: .medium))
+                            .font(Theme.Text.control)
                         SafetyBadge(safety: result.safety)
                         if result.requiresHelper {
                             StatusChip(kind: .helper, text: "Requires helper")
@@ -537,7 +548,7 @@ private struct RuleRow: View {
                 }
                 Spacer()
                 Text(formattedSize(result.totalSize))
-                    .font(.system(size: 14, weight: .semibold).monospacedDigit())
+                    .font(Theme.Text.metric)
                     .foregroundStyle(result.totalSize == 0 ? .secondary : .primary)
             }
             .padding(.horizontal, 14)
@@ -577,14 +588,14 @@ private struct ScanCategoryTile: View {
                     .fill(Theme.accentSoft)
                     .frame(width: 32, height: 32)
                 Image(systemName: icon)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(Theme.Text.control.weight(.semibold))
                     .foregroundStyle(Theme.accent)
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(Theme.Text.rowTitle.weight(.semibold))
                 Text(subtitle)
-                    .font(.system(size: 11))
+                    .font(Theme.Text.caption)
                     .foregroundStyle(.secondary)
             }
         }

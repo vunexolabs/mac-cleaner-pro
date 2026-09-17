@@ -12,9 +12,6 @@ final class SettingsModel: ObservableObject {
     @Published var activationMessage: String?
     /// `true` when `activationMessage` describes a failure (render it red).
     @Published var activationFailed = false
-    @AppStorage("MacCleanerPro.telemetryEnabled") var telemetryEnabled = false
-    @AppStorage("MacCleanerPro.crashReportsEnabled") var crashReportsEnabled = false
-    @AppStorage("MacCleanerPro.autoUpdateEnabled") var autoUpdateEnabled = true
 
     init() { refresh() }
 
@@ -88,6 +85,10 @@ final class SettingsModel: ObservableObject {
 // MARK: - Settings view
 
 struct SettingsView: View {
+    @StateObject private var permissions = PermissionsModel()
+    /// Persisted here, applied to DeletionService on change and at launch.
+    @AppStorage("MacCleanerPro.permanentDelete") private var permanentDelete = false
+    @State private var confirmPermanent = false
     @StateObject private var model = SettingsModel()
     @EnvironmentObject private var theme: ThemeManager
     @State private var showingDevices = false
@@ -126,6 +127,7 @@ struct SettingsView: View {
 
                 appearanceCard
                 licenseCard
+                permissionsCard
                 privacyCard
                 advancedCard
             }
@@ -160,117 +162,163 @@ struct SettingsView: View {
     private var licenseCard: some View {
         SettingsCard(icon: "heart.fill",
                      title: "Support the project",
-                     subtitle: "Mac Cleaner Pro is free and open source — no license required.") {
-            VStack(alignment: .leading, spacing: 14) {
-                LicenseStateBadge(state: model.licenseState, graceDaysLeft: model.gracePeriodDaysLeft)
+                     subtitle: "Free and open source. No licence, no subscription, no ads.") {
+            VStack(alignment: .leading, spacing: Layout.s3) {
+                Text("Mac Cleaner Pro is maintained by one person. Support goes to the Apple "
+                     + "Developer Program fee that unlocks notarization and system-level "
+                     + "cleanup, hosting for downloads, and the time to keep the rule packs "
+                     + "current.")
+                    .font(Theme.Text.caption)
+                    .foregroundStyle(Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
 
-                Text("Donations fund the Apple Developer Program fee for notarization, server/hosting costs, and ongoing maintenance — this is a one-person project. Sponsor accounts are still being set up, so email us in the meantime if you'd like to help.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                Button {
-                    openSupportEmail()
-                } label: {
-                    Label("Email hello@maccleanerpro.com", systemImage: "envelope.fill")
-                        .font(.system(size: 12, weight: .semibold))
-                }
-                .buttonStyle(SoftButtonStyle())
-
-                Divider()
-
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Legacy license key")
-                        .font(.system(size: 11, weight: .semibold))
-                        .tracking(1.0)
-                        .textCase(.uppercase)
-                        .foregroundStyle(.secondary)
-                    TextField("MCP-XXXXXXXXXXXX", text: $model.licenseKey)
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 13, design: .monospaced))
-                        .autocorrectionDisabled()
-                        .disabled(model.isActivating)
-                        .onChange(of: model.licenseKey) { _ in
-                            model.activationMessage = nil
-                        }
-                        .onSubmit { model.activateLicenseKey() }
-                        .padding(10)
-                        .background(
-                            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .fill(.ultraThinMaterial)
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .strokeBorder(Theme.border, lineWidth: 1)
-                        )
-
-                    if let message = model.activationMessage {
-                        Label(message, systemImage: model.activationFailed
-                              ? "exclamationmark.triangle.fill"
-                              : "checkmark.circle.fill")
-                            .font(.caption)
-                            .foregroundStyle(model.activationFailed ? Theme.bad : Theme.ok)
-                    }
-                }
-
-                HStack(spacing: 8) {
-                    Button(model.isActivating ? "Activating…" : "Activate") {
-                        model.activateLicenseKey()
+                // Only destinations that actually exist — these mirror
+                // .github/FUNDING.yml, which is the GitHub Sponsor button.
+                HStack(spacing: Layout.s2) {
+                    Button {
+                        open("https://buymeacoffee.com/vunexolabs")
+                    } label: {
+                        Label("Buy me a coffee", systemImage: "cup.and.saucer.fill")
                     }
                     .buttonStyle(GradientButtonStyle())
-                    .disabled(model.licenseKey.isEmpty || model.isActivating)
 
-                    Button("Clear") { model.clearLicense() }
-                        .buttonStyle(SoftButtonStyle())
-                        .disabled(model.licenseKey.isEmpty || model.isActivating)
+                    Button {
+                        open("https://ko-fi.com/vunexolabs")
+                    } label: {
+                        Label("Ko-fi", systemImage: "heart.fill")
+                    }
+                    .buttonStyle(SoftButtonStyle())
 
                     Spacer()
+                }
 
-                    // Show devices button (only when activated)
-                    if !isFree, let _ = currentLicenseKey {
-                        Button {
-                            showingDevices = true
-                        } label: {
-                            Label("Devices", systemImage: "laptopcomputer")
-                                .font(.system(size: 12, weight: .semibold))
+                Button { openSupportEmail() } label: {
+                    Label("Or just say hello", systemImage: "envelope")
+                }
+                .buttonStyle(.link)
+                .font(Theme.Text.caption)
+
+                DisclosureGroup {
+                    VStack(alignment: .leading, spacing: Layout.s2) {
+                        Text("Only needed if you bought a licence before the app became free. "
+                             + "Everything is unlocked either way.")
+                            .font(Theme.Text.caption)
+                            .foregroundStyle(Theme.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        LicenseStateBadge(state: model.licenseState,
+                                          graceDaysLeft: model.gracePeriodDaysLeft)
+                        TextField("MCP-XXXXXXXXXXXX", text: $model.licenseKey)
+                            .textFieldStyle(.roundedBorder)
+                            .font(Theme.Text.mono)
+                        HStack(spacing: Layout.s2) {
+                            Button("Activate") { model.activateLicenseKey() }
+                                .buttonStyle(SoftButtonStyle())
+                                .disabled(model.licenseKey.isEmpty || model.isActivating)
+                            if let msg = model.activationMessage {
+                                Text(msg)
+                                    .font(Theme.Text.caption)
+                                    .foregroundStyle(model.activationFailed ? Theme.bad : Theme.textSecondary)
+                            }
                         }
-                        .buttonStyle(SoftButtonStyle())
                     }
+                    .padding(.top, Layout.s2)
+                } label: {
+                    Text("Legacy licence key")
+                        .font(Theme.Text.caption)
+                        .foregroundStyle(Theme.textSecondary)
                 }
-                .sheet(isPresented: $showingDevices) {
-                    if let key = currentLicenseKey {
-                        ActivatedDevicesView(licenseKey: key)
-                    }
-                }
-
-                Text("Only needed if you bought a license before the project went open source — it's recognized offline via Ed25519, no purchase required otherwise.")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
             }
         }
     }
 
-    private var privacyCard: some View {
+    private var deletionModeRow: some View {
+        VStack(alignment: .leading, spacing: Layout.s2) {
+            ToggleRow(
+                label: "Delete permanently instead of using the Trash",
+                sub: permanentDelete
+                    ? "Cleaned files are removed immediately. Undo will not be available."
+                    : "Cleaned files stage in the Trash so you can undo. Recommended.",
+                isOn: Binding(
+                    get: { permanentDelete },
+                    set: { wantsPermanent in
+                        // Turning it off is always safe and takes effect at once.
+                        // Turning it on removes the undo this app is built
+                        // around, so it asks first.
+                        if wantsPermanent {
+                            confirmPermanent = true
+                        } else {
+                            permanentDelete = false
+                            applyDeletionMode()
+                        }
+                    }
+                )
+            )
+            if permanentDelete {
+                Label("Undo, the Activity Log's restore button and the 30-day window "
+                      + "do nothing while this is on.",
+                      systemImage: "exclamationmark.triangle.fill")
+                    .font(Theme.Text.caption)
+                    .foregroundStyle(Theme.warn)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .alert("Delete files permanently?", isPresented: $confirmPermanent) {
+            Button("Cancel", role: .cancel) { }
+            Button("Delete permanently", role: .destructive) {
+                permanentDelete = true
+                applyDeletionMode()
+            }
+        } message: {
+            Text("Cleaned files will be removed immediately instead of staged in the Trash. "
+                 + "Nothing can be undone or restored — including from the Activity Log. "
+                 + "Everything else about what gets selected stays the same.")
+        }
+        .onAppear { applyDeletionMode() }
+    }
+
+    private func applyDeletionMode() {
+        let mode: DeletionMode = permanentDelete ? .permanent : .trash
+        Task { await DeletionService.shared.setMode(mode) }
+    }
+
+    private func open(_ urlString: String) {
+        if let url = URL(string: urlString) { NSWorkspace.shared.open(url) }
+    }
+
+    private var permissionsCard: some View {
         SettingsCard(icon: "lock.shield.fill",
+                     title: "Permissions",
+                     subtitle: "What macOS has granted, and what it hasn't.") {
+            PermissionsCenterView(model: permissions, showsIntro: false)
+        }
+    }
+
+    private var privacyCard: some View {
+        SettingsCard(icon: "hand.raised.fill",
                      title: "Privacy",
-                     subtitle: "Both are off by default. Nothing leaves your Mac.") {
-            VStack(spacing: 0) {
-                ToggleRow(
-                    label: "Send anonymous usage data",
-                    sub: "No file paths, contents, or identifiers.",
-                    isOn: $model.telemetryEnabled
-                )
-                Divider().padding(.vertical, 4).opacity(0.3)
-                ToggleRow(
-                    label: "Send crash reports",
-                    sub: "Helps us fix the rough edges.",
-                    isOn: $model.crashReportsEnabled
-                )
-                Divider().padding(.vertical, 4).opacity(0.3)
-                ToggleRow(
-                    label: "Check for updates automatically",
-                    sub: "Daily check, version + macOS version only.",
-                    isOn: $model.autoUpdateEnabled
-                )
+                     subtitle: "Nothing to configure, because there is nothing collecting.") {
+            VStack(alignment: .leading, spacing: Layout.s2) {
+                // This card used to offer toggles for telemetry, crash reports
+                // and automatic updates. None of the three were wired to
+                // anything: there is no analytics SDK, no crash reporter and no
+                // updater in this app. A switch that does nothing is worse than
+                // no switch, so they are gone and the guarantee is stated plainly.
+                PrivacyFact(icon: "antenna.radiowaves.left.and.right.slash",
+                            text: "No analytics, no telemetry, no crash reporting. A fresh install makes no network calls at all.")
+                PrivacyFact(icon: "externaldrive.badge.xmark",
+                            text: "Nothing is uploaded. Scan results, file paths and the activity log stay on this Mac.")
+                PrivacyFact(icon: "doc.text.magnifyingglass",
+                            text: "The source is public, so none of the above has to be taken on trust.")
+
+                Button {
+                    if let url = URL(string: "https://github.com/vunexolabs/mac-cleaner-pro") {
+                        NSWorkspace.shared.open(url)
+                    }
+                } label: {
+                    Label("Read the source", systemImage: "chevron.left.forwardslash.chevron.right")
+                }
+                .buttonStyle(SoftButtonStyle())
+                .padding(.top, Layout.s1)
             }
         }
     }
@@ -279,7 +327,9 @@ struct SettingsView: View {
         SettingsCard(icon: "wrench.and.screwdriver.fill",
                      title: "Advanced",
                      subtitle: "Power-user controls.") {
-            VStack(spacing: 12) {
+            VStack(spacing: Layout.s3) {
+                deletionModeRow
+                Divider().opacity(0.3)
                 AdvancedActionRow(
                     icon: "folder",
                     title: "Reveal Activity Log folder",
@@ -313,12 +363,12 @@ private struct SettingsCard<Content: View>: View {
                         .fill(Theme.accentSoft)
                         .frame(width: 36, height: 36)
                     Image(systemName: icon)
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(Theme.Text.sectionTitle)
                         .foregroundStyle(Theme.brandGradient)
                 }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(Theme.Text.sectionTitle)
                     Text(subtitle)
                         .font(.callout)
                         .foregroundStyle(.secondary)
@@ -346,12 +396,12 @@ private struct AppearanceTile: View {
                         .fill(preview)
                         .frame(height: 64)
                     Image(systemName: mode.systemImage)
-                        .font(.system(size: 18, weight: .semibold))
+                        .font(Theme.Text.sectionTitle)
                         .foregroundStyle(isSelected ? AnyShapeStyle(Theme.brandGradient)
                                                     : AnyShapeStyle(Color.secondary))
                 }
                 Text(mode.label)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(Theme.Text.caption.weight(.semibold))
                     .foregroundStyle(isSelected ? .primary : .secondary)
             }
             .padding(.horizontal, 6)
@@ -396,7 +446,7 @@ private struct ToggleRow: View {
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
-                Text(label).font(.system(size: 13, weight: .medium))
+                Text(label).font(Theme.Text.rowTitle)
                 Text(sub).font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
@@ -419,16 +469,16 @@ private struct AdvancedActionRow: View {
         Button(action: action) {
             HStack(spacing: 12) {
                 Image(systemName: icon)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(Theme.Text.control.weight(.semibold))
                     .foregroundStyle(Theme.accent)
                     .frame(width: 20)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(.system(size: 13, weight: .medium))
+                    Text(title).font(Theme.Text.rowTitle)
                     Text(subtitle).font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(Theme.Text.caption.weight(.semibold))
                     .foregroundStyle(.tertiary)
             }
             .padding(.horizontal, 12)
@@ -456,12 +506,12 @@ private struct LicenseStateBadge: View {
                     .fill(badgeColor.opacity(0.15))
                     .frame(width: 32, height: 32)
                 Image(systemName: badgeIcon)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(Theme.Text.control.weight(.semibold))
                     .foregroundStyle(badgeColor)
             }
             VStack(alignment: .leading, spacing: 1) {
                 Text(badgeText)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(Theme.Text.rowTitle.weight(.semibold))
                 Text(badgeSub)
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -521,5 +571,29 @@ private struct LicenseStateBadge: View {
     private func redact(_ key: String) -> String {
         guard key.count > 8 else { return key }
         return String(key.prefix(4)) + "…" + String(key.suffix(4))
+    }
+}
+
+
+/// A single stated guarantee in the Privacy card. Not a control — there is
+/// nothing to turn off.
+private struct PrivacyFact: View {
+    let icon: String
+    let text: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: Layout.s2) {
+            Image(systemName: icon)
+                .font(.callout)
+                .foregroundStyle(Theme.ok)
+                .frame(width: 18)
+                .accessibilityHidden(true)
+            Text(text)
+                .font(Theme.Text.caption)
+                .foregroundStyle(Theme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .accessibilityElement(children: .combine)
     }
 }

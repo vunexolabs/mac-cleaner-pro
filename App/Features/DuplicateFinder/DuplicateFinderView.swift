@@ -6,6 +6,11 @@ import Core
 
 @MainActor
 final class DuplicateFinderModel: ObservableObject {
+    /// Shared so a scan survives the user switching tabs. The detail pane
+    /// swaps views on selection, which destroys a @StateObject and everything
+    /// it was holding — including a Space Lens walk that took minutes.
+    static let shared = DuplicateFinderModel()
+
     @Published var root: URL = URL(fileURLWithPath: NSHomeDirectory())
     @Published var minSizeMB: Double = 1
     @Published var groups: [DuplicateGroup] = []
@@ -122,10 +127,14 @@ final class DuplicateFinderModel: ObservableObject {
 // MARK: - Root view
 
 struct DuplicateFinderView: View {
-    @StateObject private var model = DuplicateFinderModel()
+    @ObservedObject private var model = DuplicateFinderModel.shared
     @StateObject private var gate = LicenseGate.shared
 
     var body: some View {
+        // Same fix as Space Lens: without a scroll container this page renders
+        // above the title bar, colliding with the window title and pushing the
+        // sidebar's brand lockup off the top.
+        ScrollView {
         VStack(alignment: .leading, spacing: 18) {
             SectionHeader(
                 eyebrow: "Reclaim wasted space",
@@ -139,7 +148,8 @@ struct DuplicateFinderView: View {
         }
         .padding(.horizontal, 28)
         .padding(.vertical, 24)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        }
         .task { await gate.refresh() }
     }
 
@@ -151,7 +161,7 @@ struct DuplicateFinderView: View {
                 Image(systemName: "folder.fill")
                     .foregroundStyle(Theme.brandGradient)
                 Text(model.root.path)
-                    .font(.system(size: 13, design: .monospaced))
+                    .font(Theme.Text.mono)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
@@ -163,17 +173,25 @@ struct DuplicateFinderView: View {
             HStack(spacing: 18) {
                 HStack(spacing: 8) {
                     Text("Min size")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(Theme.Text.caption.weight(.semibold))
                         .tracking(1.2)
                         .textCase(.uppercase)
                         .foregroundStyle(.secondary)
-                    Slider(value: $model.minSizeMB, in: 0.1...500, step: 0.1)
+                    // Same tick-mark problem as Large Files, worse here:
+                    // 0.1 steps over 0.1...500 is ~5000 ticks.
+                    Slider(
+                        value: Binding(
+                            get: { model.minSizeMB },
+                            set: { model.minSizeMB = ($0 * 10).rounded() / 10 }
+                        ),
+                        in: 0.1...500
+                    )
                         .tint(Theme.accent)
                         .frame(width: 180)
                     Text(model.minSizeMB < 1
                          ? "\(Int(model.minSizeMB * 1024)) KB"
                          : "\(Int(model.minSizeMB)) MB")
-                        .font(.system(size: 12, weight: .medium).monospacedDigit())
+                        .font(Theme.Text.metric)
                         .frame(width: 60, alignment: .trailing)
                 }
                 Spacer()
@@ -229,9 +247,9 @@ struct DuplicateFinderView: View {
             }
             VStack(spacing: 3) {
                 Text("Scanning for duplicates…")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(Theme.Text.control.weight(.semibold))
                 Text("Hashing files larger than \(model.minSizeMB < 1 ? "\(Int(model.minSizeMB * 1024)) KB" : "\(Int(model.minSizeMB)) MB")")
-                    .font(.system(size: 12))
+                    .font(Theme.Text.caption)
                     .foregroundStyle(.secondary)
             }
         }
@@ -249,14 +267,14 @@ struct DuplicateFinderView: View {
                     )
                     .frame(width: 52, height: 52)
                 Image(systemName: "doc.on.doc")
-                    .font(.system(size: 22, weight: .semibold))
+                    .font(Theme.Text.title)
                     .foregroundStyle(Theme.accent)
             }
             VStack(spacing: 4) {
                 Text("Find identical files")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(Theme.Text.control.weight(.semibold))
                 Text("Pick a folder and click Scan. Only files with matching content are flagged.")
-                    .font(.system(size: 12))
+                    .font(Theme.Text.caption)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 300)
@@ -286,13 +304,13 @@ struct DuplicateFinderView: View {
         HStack(spacing: 14) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("\(model.groups.count) duplicate \(model.groups.count == 1 ? "group" : "groups") · selected")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(Theme.Text.caption.weight(.semibold))
                     .tracking(1.0)
                     .textCase(.uppercase)
                     .foregroundStyle(.secondary)
                 AnimatedByteCount(
                     value: Double(model.totalSelectedBytes),
-                    font: .system(size: 22, weight: .semibold).monospacedDigit()
+                    font: Theme.Text.metricLarge
                 )
                 .animation(.easeInOut(duration: 0.4), value: model.totalSelectedBytes)
             }
@@ -320,10 +338,10 @@ struct DuplicateFinderView: View {
     private var undoBanner: some View {
         HStack(spacing: 12) {
             Image(systemName: "arrow.uturn.backward.circle.fill")
-                .font(.system(size: 18))
+                .font(Theme.Text.sectionTitle)
                 .foregroundStyle(Theme.ok)
             Text(model.actionMessage ?? "Files staged in trash")
-                .font(.system(size: 13, weight: .medium))
+                .font(Theme.Text.rowTitle)
             Spacer()
             Button("Undo") { model.undoLast() }.buttonStyle(SoftButtonStyle())
                 .keyboardShortcut("z", modifiers: .command)
@@ -353,19 +371,19 @@ private struct GroupCard: View {
             // Header
             HStack(spacing: 10) {
                 Image(systemName: "doc.on.doc.fill")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(Theme.Text.rowTitle.weight(.semibold))
                     .foregroundStyle(Theme.brandGradient)
                 Text(group.files[0].url.lastPathComponent)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(Theme.Text.rowTitle.weight(.semibold))
                     .lineLimit(1)
                 Text("·")
                     .foregroundStyle(.tertiary)
                 Text("\(group.files.count) copies")
-                    .font(.system(size: 12))
+                    .font(Theme.Text.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
                 Text("\(byteString(group.wastedBytes)) recoverable")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(Theme.Text.caption.weight(.semibold))
                     .tracking(0.5)
                     .foregroundStyle(Theme.accent)
             }
@@ -419,7 +437,7 @@ private struct FileRow: View {
                         .frame(width: 18, height: 18)
                     if isSelected {
                         Image(systemName: "checkmark")
-                            .font(.system(size: 10, weight: .bold))
+                            .font(Theme.Text.eyebrow.weight(.bold))
                             .foregroundStyle(Theme.accent)
                     }
                 }
@@ -431,11 +449,11 @@ private struct FileRow: View {
                 // Name + path
                 VStack(alignment: .leading, spacing: 1) {
                     Text(file.url.lastPathComponent)
-                        .font(.system(size: 13, weight: .medium))
+                        .font(Theme.Text.rowTitle)
                         .lineLimit(1)
                     Text(file.url.deletingLastPathComponent().path
                             .replacingOccurrences(of: NSHomeDirectory(), with: "~"))
-                        .font(.system(size: 11, design: .monospaced))
+                        .font(Theme.Text.mono)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .truncationMode(.middle)
@@ -446,14 +464,14 @@ private struct FileRow: View {
                 // Modified date
                 if let date = file.modifiedAt {
                     Text(date.formatted(date: .abbreviated, time: .omitted))
-                        .font(.system(size: 11).monospacedDigit())
+                        .font(Theme.Text.metric)
                         .foregroundStyle(.secondary)
                 }
 
                 // Keep badge (unselected = kept)
                 if !isSelected {
                     Text("KEEP")
-                        .font(.system(size: 9, weight: .bold))
+                        .font(Theme.Text.eyebrow.weight(.bold))
                         .tracking(0.8)
                         .foregroundStyle(Theme.ok)
                         .padding(.horizontal, 6)

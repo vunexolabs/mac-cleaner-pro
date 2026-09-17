@@ -9,7 +9,7 @@ struct OnboardingView: View {
     let onFinish: () -> Void
 
     @State private var step: OnboardingStep = .welcome
-    @State private var fdaGranted: Bool = FullDiskAccess.isGranted()
+    @StateObject private var permissions = PermissionsModel()
 
     var body: some View {
         ZStack {
@@ -44,15 +44,15 @@ struct OnboardingView: View {
                     .frame(width: 88, height: 88)
                     .shadow(color: Theme.accentRing, radius: 24, y: 10)
                 Image(systemName: "sparkles")
-                    .font(.system(size: 38, weight: .bold))
+                    .font(Theme.Text.display.weight(.bold))
                     .foregroundStyle(.white)
             }
             VStack(spacing: 6) {
                 Text("Welcome to Mac Cleaner Pro")
-                    .font(.system(size: 28, weight: .semibold))
+                    .font(Theme.Text.display)
                     .tracking(-0.6)
                 Text("Finally see what's hiding in System Data.")
-                    .font(.system(size: 18, weight: .medium))
+                    .font(Theme.Text.sectionTitle.weight(.medium))
                     .foregroundStyle(Theme.brandGradient)
             }
             Text("Apple's storage panel hides System Data behind a single opaque number. We break it down rule-by-rule. Every clean is reversible — files stage in your Trash and stay restorable for 30 days, unless you empty the Trash yourself.")
@@ -72,59 +72,34 @@ struct OnboardingView: View {
     }
 
     private var fullDiskAccess: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            HStack(spacing: 14) {
+        VStack(alignment: .leading, spacing: Layout.s5) {
+            HStack(spacing: Layout.s3) {
                 ZStack {
                     Circle()
-                        .fill(fdaGranted ? Theme.ok.opacity(0.15) : Theme.warn.opacity(0.15))
+                        .fill(permissions.relaunchRequired || !permissions.allClear
+                              ? Theme.warn.opacity(0.15) : Theme.ok.opacity(0.15))
                         .frame(width: 56, height: 56)
-                    Image(systemName: fdaGranted ? "checkmark.shield.fill" : "lock.shield")
-                        .font(.system(size: 24, weight: .semibold))
-                        .foregroundStyle(fdaGranted ? Theme.ok : Theme.warn)
+                    Image(systemName: permissions.allClear ? "checkmark.shield.fill" : "lock.shield")
+                        .font(.title)
+                        .foregroundStyle(permissions.allClear ? Theme.ok : Theme.warn)
                 }
-                VStack(alignment: .leading, spacing: 2) {
+                .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: Layout.s1) {
                     Eyebrow(text: "Step 2 of 3")
-                    Text("Full Disk Access")
-                        .font(.system(size: 24, weight: .semibold))
+                    Text("Permissions")
+                        .font(Theme.Text.title)
                         .tracking(-0.4)
                 }
                 Spacer()
             }
 
-            Text("To break down System Data — caches, logs, developer artifacts, and app leftovers across your account — Mac Cleaner Pro needs Full Disk Access. Without it, scans miss most of what's reclaimable.")
-                .foregroundStyle(.secondary)
-
-            VStack(alignment: .leading, spacing: 10) {
-                StepLine(num: 1, text: "Click **Open System Settings** below.")
-                StepLine(num: 2, text: "Toggle **Mac Cleaner Pro** on under Privacy & Security → Full Disk Access.")
-                StepLine(num: 3, text: "Return here and click **Re-check**.")
+            ScrollView {
+                PermissionsCenterView(model: permissions)
             }
-            .padding(14)
-            .glassCard(padded: false)
 
-            HStack(spacing: 10) {
-                Button {
-                    FullDiskAccess.openSystemSettings()
-                } label: {
-                    Label("Open System Settings", systemImage: "gear")
-                }
-                .buttonStyle(GradientButtonStyle())
-                Button("Re-check") { fdaGranted = FullDiskAccess.isGranted() }
-                    .buttonStyle(SoftButtonStyle())
-                Spacer()
-                if fdaGranted {
-                    Label("Granted", systemImage: "checkmark.circle.fill")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Theme.ok)
-                } else {
-                    Text("Not granted yet")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(Theme.warn)
-                }
-            }
-            Spacer()
+            Spacer(minLength: 0)
         }
-        .padding(40)
+        .padding(Layout.s6 + Layout.s3)
     }
 
     private var finish: some View {
@@ -134,13 +109,13 @@ struct OnboardingView: View {
                     .fill(Theme.ok.opacity(0.18))
                     .frame(width: 96, height: 96)
                 Image(systemName: "checkmark.seal.fill")
-                    .font(.system(size: 44, weight: .semibold))
+                    .font(Theme.Text.display)
                     .foregroundStyle(Theme.ok)
             }
             VStack(spacing: 6) {
-                Text("You're all set").font(.system(size: 28, weight: .semibold)).tracking(-0.6)
+                Text("You're all set").font(Theme.Text.display).tracking(-0.6)
                 Text("Time to demystify System Data.")
-                    .font(.system(size: 16))
+                    .font(Theme.Text.sectionTitle)
                     .foregroundStyle(.secondary)
             }
             Text("Run **Smart Scan** to see what's reclaimable. System-level cleanup is gated until we ship a notarized helper — those rules show with a 'Requires helper' badge.")
@@ -199,10 +174,10 @@ private struct FeaturePill: View {
     var body: some View {
         HStack(spacing: 6) {
             Image(systemName: icon)
-                .font(.system(size: 11, weight: .semibold))
+                .font(Theme.Text.caption.weight(.semibold))
                 .foregroundStyle(Theme.brandGradient)
             Text(text)
-                .font(.system(size: 12, weight: .medium))
+                .font(Theme.Text.caption.weight(.medium))
                 .foregroundStyle(.primary)
         }
         .padding(.horizontal, 10)
@@ -222,7 +197,7 @@ private struct StepLine: View {
                     .fill(Theme.accentSoft)
                     .frame(width: 22, height: 22)
                 Text("\(num)")
-                    .font(.system(size: 11, weight: .heavy))
+                    .font(Theme.Text.caption.weight(.heavy))
                     .foregroundStyle(Theme.accent)
             }
             Text(.init(text))
